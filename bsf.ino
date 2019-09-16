@@ -117,8 +117,6 @@ void setup() {
   ether.udpServerListenOnPort(&onListenUdpConfig, configPort);
   ether.udpServerListenOnPort(&onListenUdpLift, liftPort);
   ether.udpServerListenOnPort(&onListenUdpBin, binPort);
-  
-  ether.persistTcpConnection(true);
 }
 
 void loop() {
