@@ -17,7 +17,7 @@ static byte mymac[] = { 0x70, 0x69, 0x74, 0x2D, 0x30, 0x31 };
 // remote website ip address and port
 static byte webRelayIP[] = { 192, 168, 178, 18 };
 // remote website ip address and port
-static byte serverIP[] = { 192, 168, 178, 20 };
+static byte serverIP[] = { 192, 168, 178, 21 };
 // remote website name
 const char webrelay[] = "192.168.178.18";
 // init adapter
