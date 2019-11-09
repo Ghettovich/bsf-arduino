@@ -1,32 +1,22 @@
-
 #include <EtherCard.h>
 #include <IPAddress.h>
 
 #define ETHERCARD_UDPSERVER   1
 
 /* Network configuration */
-
 // Ethernet interface IP address
-static byte myip[] = { 192, 168, 178, 19 };
+static byte myip[] = { 192, 168, 178, 23 };
 // Gateway IP address
 static byte gwip[] = { 192, 168, 178, 1 };
 // ethernet interface ip netmask
 static byte mask[] = { 255, 255, 255, 0 };
 // Ethernet MAC address - must be unique on your network
 static byte mymac[] = { 0x70, 0x69, 0x74, 0x2D, 0x30, 0x31 };
-// remote website ip address and port
-static byte webRelayIP[] = { 192, 168, 178, 18 };
-// remote website ip address and port
-static byte serverIP[] = { 192, 168, 178, 21 };
-// remote website name
-const char webrelay[] = "192.168.178.18";
+
 // init adapter
 byte Ethernet::buffer[2000]; // TCP/IP send and receive buffer
 // server port
-int port = 12300;
-int configPort = 12309;
-int liftPort = 12310;
-int binPort = 12320;
+int port = 12310;
 
 /* IO */
 int relayValveLiftUp = 25;
@@ -37,51 +27,39 @@ int relayBinDrop = 26;
 // INPUT proximity switches !!! if LOW detection !!!
 int sensorLiftBottom = 22;
 int sensorLiftTop = 23;
-
 //int sensorBinLoad = 26;
 //int sensorBinDrop = 28;
 
+const char *returnMessage = "";
+const char *messages[] = {"BELT_FORWARD", "BELT_REVERSE", "DOSE_VALVE_SAND", "LIFT_UP", "LIFT_DOWN", "DUMP_BIN", "LOAD_BIN", "START_MIXER", "STEP_UP_MIXER_1"};
+
 // Lift at BOTTOM  BIN at LOAD
-bool isLiftUpFree()
-{
+bool isLiftUpFree() {
   if (digitalRead(sensorLiftBottom) == LOW &&
       digitalRead(sensorLiftTop) == HIGH)
-  {
     return true;
-  }
   else
-  {
     return false;
-  }
 }
 
 // Lift at TOP  BIN at LOAD
-bool isLiftDownFree()
-{
+bool isLiftDownFree() {
   if (digitalRead(sensorLiftBottom) == HIGH &&
       digitalRead(sensorLiftTop) == LOW)
-  {
     return true;
-  }
   else
-  {
     return false;
-  }
 }
 // Lift at TOP and BIN at DROP
-bool isBinAtDrop()
-{
+bool isBinAtDrop() {
   if (digitalRead(sensorLiftBottom) == HIGH &&
       digitalRead(sensorLiftTop) == LOW)
-    //digitalRead(sensorBinLoad) == HIGH &&
-    //digitalRead(sensorBinDrop) == LOW)
     return true;
   else
     return false;
 }
 
-bool isBinAtLoad()
-{
+bool isBinAtLoad() {
   if (digitalRead(sensorLiftBottom) == LOW)
     return true;
   else
@@ -89,125 +67,147 @@ bool isBinAtLoad()
 }
 
 // Lift  between sensors operator action required
-bool isLiftBetweenBottomAndTop()
-{
+bool isLiftBetweenBottomAndTop() {
   if (digitalRead(sensorLiftBottom) == HIGH &&
       digitalRead(sensorLiftTop) == HIGH)
-    //digitalRead(sensorBinLoad) == LOW &&
-    //digitalRead(sensorBinDrop) == HIGH)
     return true;
   else
     return false;
 }
 
 // BIN between sensors operator action required
-bool isBinBetweenLoadAndDrop()
-{
+bool isBinBetweenLoadAndDrop() {
   if (digitalRead(sensorLiftBottom) == HIGH &&
       digitalRead(sensorLiftTop) == LOW)
-    //digitalRead(sensorBinLoad) == HIGH &&
-    //digitalRead(sensorBinDrop) == HIGH)
     return true;
   else
     return false;
 }
 
-void onListenUdpConfig(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_port, const char *data, uint16_t len)
-{
-  IPAddress src(src_ip[0], src_ip[1], src_ip[2], src_ip[3]);
-  const char* response = "config error";
-  String msg = String(data);
-  Serial.println(msg);
-
-  if (msg.equals("INIT")) {
-    //ether.browseUrl(PSTR("/30000/"), "56", webrelay, my_result_cb);
+bool isMessageLiftUp(String msg) {
+  if (msg.equals("LIFT_UP")) {
+    return true;
   }
-  //ether.copyIp(ether.hisip, serverIP);
-  ether.makeUdpReply(response, strlen(response), src_port);
+  return false;
 }
 
-void onListenUdpLift(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_port, const char *data, uint16_t len)
-{
-  IPAddress src(src_ip[0], src_ip[1], src_ip[2], src_ip[3]);
-
-  const char* response = "lift error";
-  String msg = String(data);
-
-  if (msg.equals("LIFT_UP_STOP"))
-  {
-    response = "1";
-    digitalWrite(relayValveLiftUp, HIGH);
+bool isMessageLiftDown(String msg) {
+  if (msg.equals("LIFT_DOWN")) {
+    return true;
   }
-  else if (msg.equals("LIFT_UP"))
-  {
-    if (!isLiftUpFree())
-    {
-      response = "0";
+  return false;
+}
+
+
+bool isMessageDumpBin(String msg) {
+  if (msg.equals("DUMP_BIN")) {
+    return true;
+  }
+  return false;
+}
+
+bool isMessageLoadBin(String msg) {
+  if (msg.equals("LOAD_BIN")) {
+    return true;
+  }
+  return false;
+}
+
+bool isMessageInMessages(const char *msg) {
+  String _msg = String(msg);
+
+  for (auto c : messages) {
+    _msg = String(c);
+    if (_msg.equals(msg)) {
+      Serial.println("found message");
+      return true;
     }
-    else
-    {
-      response = "1";
+  }
+  return false;
+}
+void onLiftUpRelay() {
+  if (!digitalRead(relayValveLiftUp) == HIGH) {
+    // Relay is OFF
+    if (!isLiftUpFree()) {
+      returnMessage = "0";
+    }
+    else {
+      returnMessage = "1";
       digitalWrite(relayValveLiftUp, LOW);
     }
   }
-
-  else if (msg.equals("LIFT_DOWN_STOP"))
-  {
-    response = "1";
-    digitalWrite(relayValveLiftDown, HIGH);
+  else {
+    returnMessage = "0";
+    digitalWrite(relayValveLiftUp, HIGH);
   }
-  //lift at TOP  BIN at LOAD)
-  else if (msg.equals("LIFT_DOWN"))
-  {
+}
+
+void onLiftDownRelay() {
+  if (!digitalRead(relayValveLiftDown) == HIGH) {
     if (!isLiftDownFree())
     {
-      response = "0";
+      returnMessage = "0";
     }
     else
     {
-      response = "1";
+      returnMessage = "1";
       digitalWrite(relayValveLiftDown, LOW);
     }
   }
-  else
-  {
-    Serial.println("could not read message data");
+  else {
+    returnMessage = "0";
+    digitalWrite(relayValveLiftDown, HIGH);
   }
-  Serial.println(response);
-  ether.makeUdpReply(response, strlen(response), src_port);
 }
 
-void onListenUdpBin(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_port, const char *data, uint16_t len)
-{
-  IPAddress src(src_ip[0], src_ip[1], src_ip[2], src_ip[3]);
-
-  const char* response = "bin error";
-  String msg = String(data);
-
-  if (msg.equals("BIN_LOAD_STOP"))
-  {
-    response = "1";
-    digitalWrite(relayBinLoad, HIGH);
-  }
-  else if (msg.equals("BIN_LOAD"))
-  {
-    response = "1";
+void onBinLoad() {
+  if (!digitalRead(relayBinLoad) == HIGH) {
+    returnMessage = "1";
     digitalWrite(relayBinLoad, LOW);
   }
-  else if (msg.equals("BIN_DROP_STOP"))
-  {
-    response = "1";
-    digitalWrite(relayBinDrop, HIGH);
+  else {
+    returnMessage = "0";
+    digitalWrite(relayBinLoad, HIGH);
   }
-  else if (msg.equals("BIN_DROP"))
-  {
-    response = "1";
+}
+
+void onBinDrop() {
+  if (!digitalRead(relayBinDrop) == HIGH) {
+    returnMessage = "1";
     digitalWrite(relayBinDrop, LOW);
   }
-  else
-  {
-    Serial.println("could not read message data");
+  else {
+    returnMessage = "0";
+    digitalWrite(relayBinDrop, HIGH);
   }
+}
+
+void onListenUdpConfig(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_port, const char *data, uint16_t len) {
+  IPAddress src(src_ip[0], src_ip[1], src_ip[2], src_ip[3]);
+  
+  if (isMessageInMessages(data)) {
+    String msg = String(data);
+    Serial.println(msg);
+    
+    if (isMessageLiftUp(msg)) {
+      onLiftUpRelay();
+    }
+    else if (isMessageLiftDown(msg)) {
+      onLiftDownRelay();
+    }
+    else if (isMessageDumpBin(msg)) {
+      onBinDrop();
+    }
+    else if (isMessageLoadBin(msg)) {
+      onBinLoad();
+    }
+  }
+  else {
+    returnMessage = "Unable to find message in messages";
+    Serial.println("unable to find message in messages");
+  }
+  Serial.println(returnMessage);
+  ether.makeUdpReply(returnMessage, strlen(returnMessage), src_port);
 }
 
 void setup() {
@@ -220,12 +220,10 @@ void setup() {
   ether.staticSetup(myip, gwip, NULL, mask);
 
   // copy webRelay to hisip so it knows where to send the reply
-  // TODO: INSPECT WHEN REPLYING
-  ether.copyIp(ether.hisip, webRelayIP);
+  // TODO: INSPECT WHEN REPLYING, line should is not necessary?? IP is known on reply
+  //ether.copyIp(ether.hisip, webRelayIP);
   // Register udpSerialPrint() to port
-  ether.udpServerListenOnPort(&onListenUdpConfig, configPort);
-  ether.udpServerListenOnPort(&onListenUdpLift, liftPort);
-  ether.udpServerListenOnPort(&onListenUdpBin, binPort);
+  ether.udpServerListenOnPort(&onListenUdpConfig, port);
 
   // Register IO
   pinMode(sensorLiftTop, INPUT_PULLUP);
