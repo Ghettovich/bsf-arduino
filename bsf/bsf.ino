@@ -23,6 +23,7 @@ int relayValveLiftUp = 25;
 int relayValveLiftDown = 27;
 int relayBinLoad = 24;
 int relayBinDrop = 26;
+int relayTest = 30;
 
 // INPUT proximity switches !!! if LOW detection !!!
 int sensorLiftBottom = 22;
@@ -98,7 +99,6 @@ bool isMessageLiftDown(String msg) {
   return false;
 }
 
-
 bool isMessageDumpBin(String msg) {
   if (msg.equals("DUMP_BIN")) {
     return true;
@@ -125,8 +125,9 @@ bool isMessageInMessages(const char *msg) {
   }
   return false;
 }
+
 void onLiftUpRelay() {
-  if (!digitalRead(relayValveLiftUp) == HIGH) {
+  if (!digitalRead(relayValveLiftUp) == LOW) {
     // Relay is OFF
     if (!isLiftUpFree()) {
       returnMessage = "0";
@@ -143,7 +144,7 @@ void onLiftUpRelay() {
 }
 
 void onLiftDownRelay() {
-  if (!digitalRead(relayValveLiftDown) == HIGH) {
+  if (!digitalRead(relayValveLiftDown) == LOW) {
     if (!isLiftDownFree())
     {
       returnMessage = "0";
@@ -161,7 +162,7 @@ void onLiftDownRelay() {
 }
 
 void onBinLoad() {
-  if (!digitalRead(relayBinLoad) == HIGH) {
+  if (!digitalRead(relayBinLoad) == LOW) {
     returnMessage = "1";
     digitalWrite(relayBinLoad, LOW);
   }
@@ -172,7 +173,7 @@ void onBinLoad() {
 }
 
 void onBinDrop() {
-  if (!digitalRead(relayBinDrop) == HIGH) {
+  if (!digitalRead(relayBinDrop) == LOW) {
     returnMessage = "1";
     digitalWrite(relayBinDrop, LOW);
   }
@@ -226,14 +227,24 @@ void setup() {
   ether.udpServerListenOnPort(&onListenUdpConfig, port);
 
   // Register IO
-  pinMode(sensorLiftTop, INPUT_PULLUP);
-  pinMode(sensorLiftBottom, INPUT_PULLUP);
+  //pinMode(sensorLiftTop, INPUT_PULLUP);
+  //pinMode(sensorLiftBottom, INPUT_PULLUP);
 
   pinMode(relayValveLiftUp, OUTPUT);
   digitalWrite(relayValveLiftUp, HIGH);
 
   pinMode(relayValveLiftDown, OUTPUT);
   digitalWrite(relayValveLiftDown, HIGH);
+
+  pinMode(relayBinLoad, OUTPUT);
+  digitalWrite(relayBinLoad, HIGH);
+
+  pinMode(relayBinDrop, OUTPUT);
+  digitalWrite(relayBinDrop, HIGH);
+
+  pinMode(relayTest, OUTPUT);
+  digitalWrite(relayTest, HIGH);
+  
 }
 
 void loop() {
