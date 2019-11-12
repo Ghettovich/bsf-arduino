@@ -30,8 +30,8 @@ int relayValveFeederFwd_2 = 34;
 int relayValveFeederRvr_2 = 36;
 
 // INPUT proximity switches !!! if LOW detection !!!
-int sensorLiftBottom = 22;
-int sensorLiftTop = 23;
+int sensorLiftBottom = 25;
+int sensorLiftTop = 27;
 
 int relayArray[RELAY_ARRAY_SIZE];
 const char *relayStates = "";
@@ -142,14 +142,14 @@ bool isMessageFeederRvr_1(String msg) {
 }
 
 bool isMessageFeederFwd_2(String msg) {
-  if (msg.equals("VALVE_FEEDER_FWD_1")) {
+  if (msg.equals("VALVE_FEEDER_FWD_2")) {
     return true;
   }
   return false;
 }
 
 bool isMessageFeederRvr_2(String msg) {
-  if (msg.equals("VALVE_FEEDER_RVR_1")) {
+  if (msg.equals("VALVE_FEEDER_RVR_2")) {
     return true;
   }
   return false;
@@ -266,13 +266,13 @@ void onValveFeederFwd_2() {
 }
 
 void onValveFeederRvr_2() {
-  if (!digitalRead(relayValveFeederRvr_1) == LOW) {
+  if (!digitalRead(relayValveFeederRvr_2) == LOW) {
     returnMessage = "1";
-    digitalWrite(relayValveFeederRvr_1, LOW);
+    digitalWrite(relayValveFeederRvr_2, LOW);
   }
   else {
     returnMessage = "0";
-    digitalWrite(relayValveFeederRvr_1, HIGH);
+    digitalWrite(relayValveFeederRvr_2, HIGH);
   }
 }
 
