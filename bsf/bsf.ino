@@ -207,17 +207,24 @@ void onBinDrop() {
 void onRequestRelayState() {  
   String stateMsg = "";
   returnMessage = "";  
+
+  char stateCharArray[RELAY_ARRAY_SIZE + 1] = "";
   
   for (int i = 0; i < RELAY_ARRAY_SIZE; i++) {
     if(digitalRead(relayArray[i]) == LOW) {
       stateMsg.concat('1');
+      stateCharArray[i] = '1';
+      Serial.println("relay low");
     }
     else {
       stateMsg.concat('0');
+      stateCharArray[i] = '0';
+      Serial.println("relay high");
     }
   }
-  returnMessage = stateMsg.c_str(); 
-  //returnMessage = String(charRelayState);
+  //Serial.println(stateMsg.c_str());
+  //strcat(returnMessage,stateMsg); 
+  returnMessage = stateCharArray;
 }
 
 void onListenUdpConfig(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_port, const char *data, uint16_t len) {
@@ -241,6 +248,7 @@ void onListenUdpConfig(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_
     }
     else if (isMessageRelayStates(msg)) {
       onRequestRelayState();
+      Serial.println(returnMessage);
     }
   }
   else {
