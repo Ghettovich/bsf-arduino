@@ -2,6 +2,7 @@
 #include <IPAddress.h>
 
 #define ETHERCARD_UDPSERVER   1
+#define RELAY_ARRAY_SIZE   8
 
 /* Network configuration */
 // Ethernet interface IP address
@@ -18,21 +19,34 @@ byte Ethernet::buffer[2000]; // TCP/IP send and receive buffer
 // server port
 int port = 12310;
 
-/* IO */
-int relayValveLiftUp = 25;
-int relayValveLiftDown = 27;
-int relayBinLoad = 24;
-int relayBinDrop = 26;
-int relayTest = 30;
+// Relay pin definitions
+int relayValveLiftUp = 22;
+int relayValveLiftDown = 24;
+int relayValveBinLoad = 26;
+int relayValveBinDrop = 28;
+int relayValveFeederFwd_1 = 30;
+int relayValveFeederRvr_1 = 32;
+int relayValveFeederFwd_2 = 34;
+int relayValveFeederRvr_2 = 36;
 
 // INPUT proximity switches !!! if LOW detection !!!
 int sensorLiftBottom = 22;
 int sensorLiftTop = 23;
-//int sensorBinLoad = 26;
-//int sensorBinDrop = 28;
 
+int relayArray[RELAY_ARRAY_SIZE];
+const char *relayStates = "";
 const char *returnMessage = "";
-const char *messages[] = {"BELT_FORWARD", "BELT_REVERSE", "DOSE_VALVE_SAND", "LIFT_UP", "LIFT_DOWN", "DUMP_BIN", "LOAD_BIN", "START_MIXER", "STEP_UP_MIXER_1"};
+const char *messages[] = {"RELAY_STATES"
+, "BELT_FORWARD"
+, "BELT_REVERSE"
+, "LIFT_UP"
+, "LIFT_DOWN"
+, "DUMP_BIN"
+, "LOAD_BIN"
+, "VALVE_FEEDER_FWD_1"
+, "VALVE_FEEDER_RVR_1"
+, "VALVE_FEEDER_FWD_2"
+, "VALVE_FEEDER_RVR_2"};
 
 // Lift at BOTTOM  BIN at LOAD
 bool isLiftUpFree() {
@@ -113,6 +127,13 @@ bool isMessageLoadBin(String msg) {
   return false;
 }
 
+bool isMessageRelayStates(String msg) {
+  if (msg.equals("RELAY_STATES")) {
+    return true;
+  }
+  return false;
+}
+
 bool isMessageInMessages(const char *msg) {
   String _msg = String(msg);
 
@@ -162,34 +183,50 @@ void onLiftDownRelay() {
 }
 
 void onBinLoad() {
-  if (!digitalRead(relayBinLoad) == LOW) {
+  if (!digitalRead(relayValveBinLoad) == LOW) {
     returnMessage = "1";
-    digitalWrite(relayBinLoad, LOW);
+    digitalWrite(relayValveBinLoad, LOW);
   }
   else {
     returnMessage = "0";
-    digitalWrite(relayBinLoad, HIGH);
+    digitalWrite(relayValveBinLoad, HIGH);
   }
 }
 
 void onBinDrop() {
-  if (!digitalRead(relayBinDrop) == LOW) {
+  if (!digitalRead(relayValveBinDrop) == LOW) {
     returnMessage = "1";
-    digitalWrite(relayBinDrop, LOW);
+    digitalWrite(relayValveBinDrop, LOW);
   }
   else {
     returnMessage = "0";
-    digitalWrite(relayBinDrop, HIGH);
+    digitalWrite(relayValveBinDrop, HIGH);
   }
+}
+
+void onRequestRelayState() {  
+  String stateMsg = "";
+  returnMessage = "";  
+  
+  for (int i = 0; i < RELAY_ARRAY_SIZE; i++) {
+    if(digitalRead(relayArray[i]) == LOW) {
+      stateMsg.concat('1');
+    }
+    else {
+      stateMsg.concat('0');
+    }
+  }
+  returnMessage = stateMsg.c_str(); 
+  //returnMessage = String(charRelayState);
 }
 
 void onListenUdpConfig(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_port, const char *data, uint16_t len) {
   IPAddress src(src_ip[0], src_ip[1], src_ip[2], src_ip[3]);
-  
+
   if (isMessageInMessages(data)) {
     String msg = String(data);
     Serial.println(msg);
-    
+
     if (isMessageLiftUp(msg)) {
       onLiftUpRelay();
     }
@@ -202,48 +239,51 @@ void onListenUdpConfig(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_
     else if (isMessageLoadBin(msg)) {
       onBinLoad();
     }
+    else if (isMessageRelayStates(msg)) {
+      onRequestRelayState();
+    }
   }
   else {
     returnMessage = "Unable to find message in messages";
-    Serial.println("unable to find message in messages");
+    Serial.println("Unable to find message in messages");
   }
   Serial.println(returnMessage);
   ether.makeUdpReply(returnMessage, strlen(returnMessage), src_port);
 }
 
+void initializeRelayArray() {
+  relayArray[0] = relayValveLiftUp;
+  relayArray[1] = relayValveLiftDown;
+  relayArray[2] = relayValveBinLoad;
+  relayArray[3] = relayValveBinDrop;
+  relayArray[4] = relayValveFeederFwd_1;
+  relayArray[5] = relayValveFeederRvr_1;
+  relayArray[6] = relayValveFeederFwd_2;
+  relayArray[7] = relayValveFeederRvr_2;
+
+  for (int i = 0; i < RELAY_ARRAY_SIZE; i++) {
+    pinMode(relayArray[i], OUTPUT);
+    if (!digitalRead(relayArray[i]) == HIGH) {
+      digitalWrite(relayArray[i], HIGH);
+    }
+  }
+}
+
 void setup() {
   // Register network adapter
   Serial.begin(57600);
-  Serial.println(F("\n[webClient]"));
+  Serial.println(F("\n[bsf-arduino]"));
   // Change 'SS' to your Slave Select pin if you aren't using the default pin
   if (ether.begin(sizeof Ethernet::buffer, mymac, SS) == 0)
     Serial.println("Failed init adapter");
+    
   ether.staticSetup(myip, gwip, NULL, mask);
-
-  // copy webRelay to hisip so it knows where to send the reply
-  // TODO: INSPECT WHEN REPLYING, line should is not necessary?? IP is known on reply
-  //ether.copyIp(ether.hisip, webRelayIP);
-  // Register udpSerialPrint() to port
   ether.udpServerListenOnPort(&onListenUdpConfig, port);
 
   // Register IO
+  initializeRelayArray();
   //pinMode(sensorLiftTop, INPUT_PULLUP);
   //pinMode(sensorLiftBottom, INPUT_PULLUP);
-
-  pinMode(relayValveLiftUp, OUTPUT);
-  digitalWrite(relayValveLiftUp, HIGH);
-
-  pinMode(relayValveLiftDown, OUTPUT);
-  digitalWrite(relayValveLiftDown, HIGH);
-
-  pinMode(relayBinLoad, OUTPUT);
-  digitalWrite(relayBinLoad, HIGH);
-
-  pinMode(relayBinDrop, OUTPUT);
-  digitalWrite(relayBinDrop, HIGH);
-
-  pinMode(relayTest, OUTPUT);
-  digitalWrite(relayTest, HIGH);
   
 }
 
