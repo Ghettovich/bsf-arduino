@@ -127,6 +127,34 @@ bool isMessageLoadBin(String msg) {
   return false;
 }
 
+bool isMessageFeederFwd_1(String msg) {
+  if (msg.equals("VALVE_FEEDER_FWD_1")) {
+    return true;
+  }
+  return false;
+}
+
+bool isMessageFeederRvr_1(String msg) {
+  if (msg.equals("VALVE_FEEDER_RVR_1")) {
+    return true;
+  }
+  return false;
+}
+
+bool isMessageFeederFwd_2(String msg) {
+  if (msg.equals("VALVE_FEEDER_FWD_1")) {
+    return true;
+  }
+  return false;
+}
+
+bool isMessageFeederRvr_2(String msg) {
+  if (msg.equals("VALVE_FEEDER_RVR_1")) {
+    return true;
+  }
+  return false;
+}
+
 bool isMessageRelayStates(String msg) {
   if (msg.equals("RELAY_STATES")) {
     return true;
@@ -204,6 +232,50 @@ void onBinDrop() {
   }
 }
 
+void onValveFeederFwd_1() {
+  if (!digitalRead(relayValveFeederFwd_1) == LOW) {
+    returnMessage = "1";
+    digitalWrite(relayValveFeederFwd_1, LOW);
+  }
+  else {
+    returnMessage = "0";
+    digitalWrite(relayValveFeederFwd_1, HIGH);
+  }
+}
+
+void onValveFeederRvr_1() {
+  if (!digitalRead(relayValveFeederRvr_1) == LOW) {
+    returnMessage = "1";
+    digitalWrite(relayValveFeederRvr_1, LOW);
+  }
+  else {
+    returnMessage = "0";
+    digitalWrite(relayValveFeederRvr_1, HIGH);
+  }
+}
+
+void onValveFeederFwd_2() {
+  if (!digitalRead(relayValveFeederFwd_2) == LOW) {
+    returnMessage = "1";
+    digitalWrite(relayValveFeederFwd_2, LOW);
+  }
+  else {
+    returnMessage = "0";
+    digitalWrite(relayValveFeederFwd_2, HIGH);
+  }
+}
+
+void onValveFeederRvr_2() {
+  if (!digitalRead(relayValveFeederRvr_1) == LOW) {
+    returnMessage = "1";
+    digitalWrite(relayValveFeederRvr_1, LOW);
+  }
+  else {
+    returnMessage = "0";
+    digitalWrite(relayValveFeederRvr_1, HIGH);
+  }
+}
+
 void onRequestRelayState() {  
   String stateMsg = "";
   returnMessage = "";  
@@ -246,9 +318,20 @@ void onListenUdpConfig(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_
     else if (isMessageLoadBin(msg)) {
       onBinLoad();
     }
+    else if (isMessageFeederFwd_1(msg)) {
+      onValveFeederFwd_1();
+    }
+    else if (isMessageFeederRvr_1(msg)) {
+      onValveFeederRvr_1();
+    }
+    else if (isMessageFeederFwd_2(msg)) {
+      onValveFeederFwd_2();
+    }
+    else if (isMessageFeederRvr_2(msg)) {
+      onValveFeederRvr_2();
+    }
     else if (isMessageRelayStates(msg)) {
       onRequestRelayState();
-      Serial.println(returnMessage);
     }
   }
   else {
