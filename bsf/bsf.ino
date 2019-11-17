@@ -30,23 +30,23 @@ int relayValveFeederFwd_2 = 34;
 int relayValveFeederRev_2 = 36;
 
 // INPUT proximity switches !!! if LOW detection !!!
-int sensorLiftBottom = 25;
-int sensorLiftTop = 27;
+int sensorLiftBottom = 38;
+int sensorLiftTop = 40;
 
 int relayArray[RELAY_ARRAY_SIZE];
 const char *relayStates = "";
 const char *returnMessage = "";
-const char *messages[] = {"RELAY_STATES"
-, "BELT_FORWARD"
-, "BELT_REVERSE"
-, "LIFT_UP"
+const char *messages[] = {"LIFT_UP"
 , "LIFT_DOWN"
 , "DUMP_BIN"
 , "LOAD_BIN"
 , "VALVE_FEEDER_FWD_1"
 , "VALVE_FEEDER_REV_1"
 , "VALVE_FEEDER_FWD_2"
-, "VALVE_FEEDER_REV_2"};
+, "VALVE_FEEDER_REV_2"
+, "BELT_FORWARD"
+, "BELT_REVERSE"
+, "RELAY_STATE"};
 
 // Lift at BOTTOM  BIN at LOAD
 bool isLiftUpFree() {
@@ -156,7 +156,7 @@ bool isMessageFeederRev_2(String msg) {
 }
 
 bool isMessageRelayStates(String msg) {
-  if (msg.equals("RELAY_STATES")) {
+  if (msg.equals("RELAY_STATE")) {
     return true;
   }
   return false;
@@ -373,8 +373,8 @@ void setup() {
 
   // Register IO
   initializeRelayArray();
-  //pinMode(sensorLiftTop, INPUT_PULLUP);
-  //pinMode(sensorLiftBottom, INPUT_PULLUP);
+  pinMode(sensorLiftTop, INPUT_PULLUP);
+  pinMode(sensorLiftBottom, INPUT_PULLUP);
   
 }
 
