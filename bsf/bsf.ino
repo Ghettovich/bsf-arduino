@@ -25,9 +25,9 @@ int relayValveLiftDown = 24;
 int relayValveBinLoad = 26;
 int relayValveBinDrop = 28;
 int relayValveFeederFwd_1 = 30;
-int relayValveFeederRvr_1 = 32;
+int relayValveFeederRev_1 = 32;
 int relayValveFeederFwd_2 = 34;
-int relayValveFeederRvr_2 = 36;
+int relayValveFeederRev_2 = 36;
 
 // INPUT proximity switches !!! if LOW detection !!!
 int sensorLiftBottom = 25;
@@ -44,9 +44,9 @@ const char *messages[] = {"RELAY_STATES"
 , "DUMP_BIN"
 , "LOAD_BIN"
 , "VALVE_FEEDER_FWD_1"
-, "VALVE_FEEDER_RVR_1"
+, "VALVE_FEEDER_REV_1"
 , "VALVE_FEEDER_FWD_2"
-, "VALVE_FEEDER_RVR_2"};
+, "VALVE_FEEDER_REV_2"};
 
 // Lift at BOTTOM  BIN at LOAD
 bool isLiftUpFree() {
@@ -134,8 +134,8 @@ bool isMessageFeederFwd_1(String msg) {
   return false;
 }
 
-bool isMessageFeederRvr_1(String msg) {
-  if (msg.equals("VALVE_FEEDER_RVR_1")) {
+bool isMessageFeederRev_1(String msg) {
+  if (msg.equals("VALVE_FEEDER_REV_1")) {
     return true;
   }
   return false;
@@ -148,8 +148,8 @@ bool isMessageFeederFwd_2(String msg) {
   return false;
 }
 
-bool isMessageFeederRvr_2(String msg) {
-  if (msg.equals("VALVE_FEEDER_RVR_2")) {
+bool isMessageFeederRev_2(String msg) {
+  if (msg.equals("VALVE_FEEDER_REV_2")) {
     return true;
   }
   return false;
@@ -243,14 +243,14 @@ void onValveFeederFwd_1() {
   }
 }
 
-void onValveFeederRvr_1() {
-  if (!digitalRead(relayValveFeederRvr_1) == LOW) {
+void onValveFeederRev_1() {
+  if (!digitalRead(relayValveFeederRev_1) == LOW) {
     returnMessage = "1";
-    digitalWrite(relayValveFeederRvr_1, LOW);
+    digitalWrite(relayValveFeederRev_1, LOW);
   }
   else {
     returnMessage = "0";
-    digitalWrite(relayValveFeederRvr_1, HIGH);
+    digitalWrite(relayValveFeederRev_1, HIGH);
   }
 }
 
@@ -265,14 +265,14 @@ void onValveFeederFwd_2() {
   }
 }
 
-void onValveFeederRvr_2() {
-  if (!digitalRead(relayValveFeederRvr_2) == LOW) {
+void onValveFeederRev_2() {
+  if (!digitalRead(relayValveFeederRev_2) == LOW) {
     returnMessage = "1";
-    digitalWrite(relayValveFeederRvr_2, LOW);
+    digitalWrite(relayValveFeederRev_2, LOW);
   }
   else {
     returnMessage = "0";
-    digitalWrite(relayValveFeederRvr_2, HIGH);
+    digitalWrite(relayValveFeederRev_2, HIGH);
   }
 }
 
@@ -321,14 +321,14 @@ void onListenUdpConfig(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_
     else if (isMessageFeederFwd_1(msg)) {
       onValveFeederFwd_1();
     }
-    else if (isMessageFeederRvr_1(msg)) {
-      onValveFeederRvr_1();
+    else if (isMessageFeederRev_1(msg)) {
+      onValveFeederRev_1();
     }
     else if (isMessageFeederFwd_2(msg)) {
       onValveFeederFwd_2();
     }
-    else if (isMessageFeederRvr_2(msg)) {
-      onValveFeederRvr_2();
+    else if (isMessageFeederRev_2(msg)) {
+      onValveFeederRev_2();
     }
     else if (isMessageRelayStates(msg)) {
       onRequestRelayState();
@@ -348,9 +348,9 @@ void initializeRelayArray() {
   relayArray[2] = relayValveBinLoad;
   relayArray[3] = relayValveBinDrop;
   relayArray[4] = relayValveFeederFwd_1;
-  relayArray[5] = relayValveFeederRvr_1;
+  relayArray[5] = relayValveFeederRev_1;
   relayArray[6] = relayValveFeederFwd_2;
-  relayArray[7] = relayValveFeederRvr_2;
+  relayArray[7] = relayValveFeederRev_2;
 
   for (int i = 0; i < RELAY_ARRAY_SIZE; i++) {
     pinMode(relayArray[i], OUTPUT);
