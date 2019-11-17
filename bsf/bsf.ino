@@ -31,8 +31,8 @@ int relayValveFeederFwd_2 = 34;
 int relayValveFeederRev_2 = 36;
 
 // INPUT proximity switches !!! if LOW detection !!!
-int sensorLiftBottom = 38;
-int sensorLiftTop = 40;
+int sensorLiftBottom = 40;
+int sensorLiftTop = 42;
 
 int relayArray[RELAY_ARRAY_SIZE];
 const char *relayStates = "";
@@ -99,82 +99,6 @@ bool isBinBetweenLoadAndDrop() {
     return true;
   else
     return false;
-}
-
-bool isMessageLiftUp(String msg) {
-  if (msg.equals("LIFT_UP")) {
-    return true;
-  }
-  return false;
-}
-
-bool isMessageLiftDown(String msg) {
-  if (msg.equals("LIFT_DOWN")) {
-    return true;
-  }
-  return false;
-}
-
-bool isMessageDumpBin(String msg) {
-  if (msg.equals("BIN_DROP")) {
-    return true;
-  }
-  return false;
-}
-
-bool isMessageLoadBin(String msg) {
-  if (msg.equals("BIN_LOAD")) {
-    return true;
-  }
-  return false;
-}
-
-bool isMessageFeederFwd_1(String msg) {
-  if (msg.equals("VALVE_FEEDER_FWD_1")) {
-    return true;
-  }
-  return false;
-}
-
-bool isMessageFeederRev_1(String msg) {
-  if (msg.equals("VALVE_FEEDER_REV_1")) {
-    return true;
-  }
-  return false;
-}
-
-bool isMessageFeederFwd_2(String msg) {
-  if (msg.equals("VALVE_FEEDER_FWD_2")) {
-    return true;
-  }
-  return false;
-}
-
-bool isMessageFeederRev_2(String msg) {
-  if (msg.equals("VALVE_FEEDER_REV_2")) {
-    return true;
-  }
-  return false;
-}
-
-bool isMessageRelayStates(String msg) {
-  if (msg.equals("RELAY_STATE")) {
-    return true;
-  }
-  return false;
-}
-
-bool isMessageInMessages(const char *msg) {
-  String _msg = String(msg);
-
-  for (auto c : messages) {
-    _msg = String(c);
-    if (_msg.equals(msg)) {
-      Serial.println("found message");
-      return true;
-    }
-  }
-  return false;
 }
 
 void onLiftUpRelay() {
@@ -278,71 +202,24 @@ void onValveFeederRev_2() {
   }
 }
 
-void onRequestRelayState() {
-  String stateMsg = "";
+void onRequestRelayState() {  
   returnMessage = "";
-
   char stateCharArray[RELAY_ARRAY_SIZE + 1] = "";
 
   for (int i = 0; i < RELAY_ARRAY_SIZE; i++) {
     if (digitalRead(relayArray[i]) == LOW) {
-      stateMsg.concat('1');
       stateCharArray[i] = '1';
       Serial.println("relay low");
     }
     else {
-      stateMsg.concat('0');
       stateCharArray[i] = '0';
       Serial.println("relay high");
     }
   }
-  //Serial.println(stateMsg.c_str());
-  //strcat(returnMessage,stateMsg);
+  
   returnMessage = stateCharArray;
 }
 
-//void onListenUdpConfig(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_port, const char *data, uint16_t len) {
-//  IPAddress src(src_ip[0], src_ip[1], src_ip[2], src_ip[3]);
-//
-//  if (isMessageInMessages(data)) {
-//    String msg = String(data);
-//    Serial.println(msg);
-//
-//    if (isMessageLiftUp(msg)) {
-//      onLiftUpRelay();
-//    }
-//    else if (isMessageLiftDown(msg)) {
-//      onLiftDownRelay();
-//    }
-//    else if (isMessageDumpBin(msg)) {
-//      onBinDrop();
-//    }
-//    else if (isMessageLoadBin(msg)) {
-//      onBinLoad();
-//    }
-//    else if (isMessageFeederFwd_1(msg)) {
-//      onValveFeederFwd_1();
-//    }
-//    else if (isMessageFeederRev_1(msg)) {
-//      onValveFeederRev_1();
-//    }
-//    else if (isMessageFeederFwd_2(msg)) {
-//      onValveFeederFwd_2();
-//    }
-//    else if (isMessageFeederRev_2(msg)) {
-//      onValveFeederRev_2();
-//    }
-//    else if (isMessageRelayStates(msg)) {
-//      onRequestRelayState();
-//    }
-//  }
-//  else {
-//    returnMessage = "Unable to find message in messages";
-//    Serial.println("Unable to find message in messages");
-//  }
-//  Serial.println(returnMessage);
-//  ether.makeUdpReply(returnMessage, strlen(returnMessage), src_port);
-//}
 
 void onListenUdpMessage(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_port, const char *data, uint16_t len) {
   IPAddress src(src_ip[0], src_ip[1], src_ip[2], src_ip[3]);
