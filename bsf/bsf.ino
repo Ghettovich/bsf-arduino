@@ -203,19 +203,15 @@ void onValveFeederRev_2() {
 }
 
 void onRequestRelayState() {
-  String stateMsg = "";
-  returnMessage = "";
-  
+  returnMessage = "";  
   char stateCharArray[RELAY_ARRAY_SIZE + 1] = "";
 
   for (int i = 0; i < RELAY_ARRAY_SIZE; i++) {
     if (digitalRead(relayArray[i]) == LOW) {
-      stateMsg.concat('1');
       stateCharArray[i] = '1';
       Serial.println("relay low");
     }
     else {
-      stateMsg.concat('0');
       stateCharArray[i] = '0';
       Serial.println("relay high");
     }
