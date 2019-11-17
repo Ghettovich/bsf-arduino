@@ -2,7 +2,8 @@
 #include <IPAddress.h>
 
 #define ETHERCARD_UDPSERVER   1
-#define RELAY_ARRAY_SIZE   8
+#define RELAY_ARRAY_SIZE      8
+#define MESSAGE_ARRAY_SIZE   11
 
 /* Network configuration */
 // Ethernet interface IP address
@@ -36,17 +37,18 @@ int sensorLiftTop = 40;
 int relayArray[RELAY_ARRAY_SIZE];
 const char *relayStates = "";
 const char *returnMessage = "";
-const char *messages[] = {"LIFT_UP"
-, "LIFT_DOWN"
-, "DUMP_BIN"
-, "LOAD_BIN"
-, "VALVE_FEEDER_FWD_1"
-, "VALVE_FEEDER_REV_1"
-, "VALVE_FEEDER_FWD_2"
-, "VALVE_FEEDER_REV_2"
-, "BELT_FORWARD"
-, "BELT_REVERSE"
-, "RELAY_STATE"};
+const char *messages[MESSAGE_ARRAY_SIZE] = {"LIFT_UP"
+                                            , "LIFT_DOWN"
+                                            , "BIN_LOAD"
+                                            , "BIN_DROP"
+                                            , "VALVE_FEEDER_FWD_1"
+                                            , "VALVE_FEEDER_REV_1"
+                                            , "VALVE_FEEDER_FWD_2"
+                                            , "VALVE_FEEDER_REV_2"
+                                            , "BELT_FORWARD"
+                                            , "BELT_REVERSE"
+                                            , "RELAY_STATE"
+                                           };
 
 // Lift at BOTTOM  BIN at LOAD
 bool isLiftUpFree() {
@@ -114,14 +116,14 @@ bool isMessageLiftDown(String msg) {
 }
 
 bool isMessageDumpBin(String msg) {
-  if (msg.equals("DUMP_BIN")) {
+  if (msg.equals("BIN_DROP")) {
     return true;
   }
   return false;
 }
 
 bool isMessageLoadBin(String msg) {
-  if (msg.equals("LOAD_BIN")) {
+  if (msg.equals("BIN_LOAD")) {
     return true;
   }
   return false;
@@ -276,14 +278,14 @@ void onValveFeederRev_2() {
   }
 }
 
-void onRequestRelayState() {  
+void onRequestRelayState() {
   String stateMsg = "";
-  returnMessage = "";  
+  returnMessage = "";
 
   char stateCharArray[RELAY_ARRAY_SIZE + 1] = "";
-  
+
   for (int i = 0; i < RELAY_ARRAY_SIZE; i++) {
-    if(digitalRead(relayArray[i]) == LOW) {
+    if (digitalRead(relayArray[i]) == LOW) {
       stateMsg.concat('1');
       stateCharArray[i] = '1';
       Serial.println("relay low");
@@ -295,51 +297,100 @@ void onRequestRelayState() {
     }
   }
   //Serial.println(stateMsg.c_str());
-  //strcat(returnMessage,stateMsg); 
+  //strcat(returnMessage,stateMsg);
   returnMessage = stateCharArray;
 }
 
-void onListenUdpConfig(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_port, const char *data, uint16_t len) {
+//void onListenUdpConfig(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_port, const char *data, uint16_t len) {
+//  IPAddress src(src_ip[0], src_ip[1], src_ip[2], src_ip[3]);
+//
+//  if (isMessageInMessages(data)) {
+//    String msg = String(data);
+//    Serial.println(msg);
+//
+//    if (isMessageLiftUp(msg)) {
+//      onLiftUpRelay();
+//    }
+//    else if (isMessageLiftDown(msg)) {
+//      onLiftDownRelay();
+//    }
+//    else if (isMessageDumpBin(msg)) {
+//      onBinDrop();
+//    }
+//    else if (isMessageLoadBin(msg)) {
+//      onBinLoad();
+//    }
+//    else if (isMessageFeederFwd_1(msg)) {
+//      onValveFeederFwd_1();
+//    }
+//    else if (isMessageFeederRev_1(msg)) {
+//      onValveFeederRev_1();
+//    }
+//    else if (isMessageFeederFwd_2(msg)) {
+//      onValveFeederFwd_2();
+//    }
+//    else if (isMessageFeederRev_2(msg)) {
+//      onValveFeederRev_2();
+//    }
+//    else if (isMessageRelayStates(msg)) {
+//      onRequestRelayState();
+//    }
+//  }
+//  else {
+//    returnMessage = "Unable to find message in messages";
+//    Serial.println("Unable to find message in messages");
+//  }
+//  Serial.println(returnMessage);
+//  ether.makeUdpReply(returnMessage, strlen(returnMessage), src_port);
+//}
+
+void onListenUdpMessage(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_port, const char *data, uint16_t len) {
   IPAddress src(src_ip[0], src_ip[1], src_ip[2], src_ip[3]);
 
-  if (isMessageInMessages(data)) {
-    String msg = String(data);
-    Serial.println(msg);
+  String _msg = String(data);
 
-    if (isMessageLiftUp(msg)) {
-      onLiftUpRelay();
-    }
-    else if (isMessageLiftDown(msg)) {
-      onLiftDownRelay();
-    }
-    else if (isMessageDumpBin(msg)) {
-      onBinDrop();
-    }
-    else if (isMessageLoadBin(msg)) {
-      onBinLoad();
-    }
-    else if (isMessageFeederFwd_1(msg)) {
-      onValveFeederFwd_1();
-    }
-    else if (isMessageFeederRev_1(msg)) {
-      onValveFeederRev_1();
-    }
-    else if (isMessageFeederFwd_2(msg)) {
-      onValveFeederFwd_2();
-    }
-    else if (isMessageFeederRev_2(msg)) {
-      onValveFeederRev_2();
-    }
-    else if (isMessageRelayStates(msg)) {
-      onRequestRelayState();
+  for (int i = 0; i < MESSAGE_ARRAY_SIZE; i++) {
+    String c = String(messages[i]);
+
+    if (_msg.equals(c)) {
+      switch (i) {
+        case 0:
+          onLiftUpRelay();
+          break;
+        case 1:
+          onLiftDownRelay();
+          break;
+        case 2:
+          onBinLoad();
+          break;
+        case 3:
+          onBinDrop();
+          break;
+        case 4:
+          onValveFeederFwd_1();
+          break;
+        case 5:
+          onValveFeederRev_1();
+          break;
+        case 6:
+          onValveFeederFwd_2();
+          break;
+        case 7:
+          onValveFeederRev_2();
+          break;
+        case 8:
+          //reserved for belt fwd
+          break;
+        case 9:
+          //reserved for belt rev
+          break;
+        // !! Will eventually be 17 when other relay block is connected !!
+        case 10:
+          onRequestRelayState();
+          break;
+      }
     }
   }
-  else {
-    returnMessage = "Unable to find message in messages";
-    Serial.println("Unable to find message in messages");
-  }
-  Serial.println(returnMessage);
-  ether.makeUdpReply(returnMessage, strlen(returnMessage), src_port);
 }
 
 void initializeRelayArray() {
@@ -367,15 +418,16 @@ void setup() {
   // Change 'SS' to your Slave Select pin if you aren't using the default pin
   if (ether.begin(sizeof Ethernet::buffer, mymac, SS) == 0)
     Serial.println("Failed init adapter");
-    
+
   ether.staticSetup(myip, gwip, NULL, mask);
-  ether.udpServerListenOnPort(&onListenUdpConfig, port);
+  //ether.udpServerListenOnPort(&onListenUdpConfig, port);
+  ether.udpServerListenOnPort(&onListenUdpMessage, port);
 
   // Register IO
   initializeRelayArray();
   pinMode(sensorLiftTop, INPUT_PULLUP);
   pinMode(sensorLiftBottom, INPUT_PULLUP);
-  
+
 }
 
 void loop() {
