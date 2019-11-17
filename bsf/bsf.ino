@@ -272,6 +272,7 @@ void onListenUdpMessage(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src
       }
     }
   }
+  ether.makeUdpReply(returnMessage, strlen(returnMessage), src_port);
 }
 
 void initializeRelayArray() {
