@@ -348,9 +348,9 @@ void initializeRelayArray() {
 
 void initializeSensorArray() {
   sensorArray[0] = sensorLiftBottom;
-  pinMode(sensorLiftBottom, INPUT_PULLUP);
+  pinMode(sensorArray[0], INPUT_PULLUP);
   sensorArray[1] = sensorLiftTop;
-  pinMode(sensorLiftTop, INPUT_PULLUP);
+  pinMode(sensorArray[1], INPUT_PULLUP);
 
 }
 
@@ -398,25 +398,13 @@ void setup() {
 
 void loop() {
 
-  relayLiftUpState = digitalRead(relayValveLiftUp);
-
-  // Relay LIFT UP state has changed
-  if(relayLiftUpState != lastRelayLiftUpState) {
-    // Bin is going up
-    if(relayLiftUpState == LOW) {
-        Serial.println("lift up relay LOW");
-        // IF bin is detected at DROP with sensor LIFT TOP 
-        if(isBinAtDrop()) {
-          // TURN OFF relayValveLiftUp
-          digitalWrite(relayValveLiftUp, HIGH);
-        }
-    }    
+  if (digitalRead(relayValveLiftUp) == LOW) {
+    if (digitalRead(sensorLiftBottom) == HIGH &&
+        digitalRead(sensorLiftTop) == LOW) {
+      digitalWrite(relayValveLiftUp, HIGH);
+    }
   }
 
-  
-  lastRelayLiftUpState = relayLiftUpState;
-  
-  
   // This must be called for ethercard functions to work.
   ether.packetLoop(ether.packetReceive());
 }
