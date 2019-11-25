@@ -15,11 +15,15 @@ static byte gwip[] = { 192, 168, 178, 1 };
 static byte mask[] = { 255, 255, 255, 0 };
 // Ethernet MAC address - must be unique on your network
 static byte mymac[] = { 0x70, 0x69, 0x74, 0x2D, 0x30, 0x31 };
+// Server IP
+byte serverIP[] = { 192,168,178,174 };
+  
 
 // init adapter
 byte Ethernet::buffer[2000]; // TCP/IP send and receive buffer
 // server port
 int port = 12310;
+int destPort = 12300;
 
 // Relay pin definitions
 int relayValveLiftUp = 22;
@@ -34,15 +38,7 @@ int relayValveFeederRev_2 = 36;
 // INPUT proximity switches !!! if LOW detection !!!
 int sensorLiftBottom = 40, sensorLiftTop = 42;
 
-// Relay States
-int relayLiftUpState = 0, relayLiftBottomState = 0;
-int lastRelayLiftUpState = 0, lastRelayLiftBottomState = 0;
-
-// Sensor States
-int sensorLiftBottomState = 0, sensorLiftTopState = 0;
-int lastSensorLiftBottomState = 0, lastSensorLiftTopState = 0;
-
-
+// ARRAY definitions
 int relayArray[RELAY_ARRAY_SIZE];
 int sensorArray[SENSOR_ARRAY_SIZE];
 
@@ -69,6 +65,9 @@ const char *messages[MESSAGE_ARRAY_SIZE] = {"LIFT_UP"
                                             , "SENSOR_STATE"
                                            };
 
+// REPLIES
+char textToSend[] = "test 123";
+
 // Lift at BOTTOM  BIN at LOAD
 bool isLiftUpFree() {
   if (digitalRead(sensorLiftBottom) == LOW &&
@@ -87,7 +86,7 @@ bool isLiftDownFree() {
     return false;
 }
 // Lift at TOP and BIN at DROP
-bool isBinAtDrop() {
+static bool isBinAtDrop() {
   if (digitalRead(sensorLiftBottom) == HIGH &&
       digitalRead(sensorLiftTop) == LOW)
     return true;
@@ -380,6 +379,7 @@ bool isRelayCompletelyOff() {
   }
   return true;
 }
+
 void setup() {
   // Register network adapter
   Serial.begin(57600);
@@ -390,6 +390,7 @@ void setup() {
 
   ether.staticSetup(myip, gwip, NULL, mask);
   ether.udpServerListenOnPort(&onListenUdpMessage, port);
+  ether.copyIp(ether.hisip, serverIP);
 
   // Register IO
   initializeRelayArray();
@@ -398,12 +399,11 @@ void setup() {
 
 void loop() {
 
-  if (digitalRead(relayValveLiftUp) == LOW) {
-    if (digitalRead(sensorLiftBottom) == HIGH &&
-        digitalRead(sensorLiftTop) == LOW) {
-      digitalWrite(relayValveLiftUp, HIGH);
-    }
+  if (digitalRead(relayValveLiftUp) == LOW && isBinAtDrop()) {
+    digitalWrite(relayValveLiftUp, HIGH);
+    ether.sendUdp(textToSend, sizeof(textToSend), port, ether.hisip, destPort );
   }
+  
 
   // This must be called for ethercard functions to work.
   ether.packetLoop(ether.packetReceive());
