@@ -3,7 +3,8 @@
 
 #define ETHERCARD_UDPSERVER   1
 #define RELAY_ARRAY_SIZE      8
-#define MESSAGE_ARRAY_SIZE   11
+#define SENSOR_ARRAY_SIZE     2
+#define MESSAGE_ARRAY_SIZE   18
 
 /* Network configuration */
 // Ethernet interface IP address
@@ -31,11 +32,22 @@ int relayValveFeederFwd_2 = 34;
 int relayValveFeederRev_2 = 36;
 
 // INPUT proximity switches !!! if LOW detection !!!
-int sensorLiftBottom = 40;
-int sensorLiftTop = 42;
+int sensorLiftBottom = 40, sensorLiftTop = 42;
+
+// Relay States
+int relayLiftUpState = 0, relayLiftBottomState = 0;
+int lastRelayLiftUpState = 0, lastRelayLiftBottomState = 0;
+
+// Sensor States
+int sensorLiftBottomState = 0, sensorLiftTopState = 0;
+int lastSensorLiftBottomState = 0, lastSensorLiftTopState = 0;
+
 
 int relayArray[RELAY_ARRAY_SIZE];
-const char *relayStates = "";
+int sensorArray[SENSOR_ARRAY_SIZE];
+
+//const char *state = "";
+//const char *relayStates = "";
 const char *returnMessage = "";
 const char *messages[MESSAGE_ARRAY_SIZE] = {"LIFT_UP"
                                             , "LIFT_DOWN"
@@ -44,10 +56,17 @@ const char *messages[MESSAGE_ARRAY_SIZE] = {"LIFT_UP"
                                             , "VALVE_FEEDER_FWD_1"
                                             , "VALVE_FEEDER_REV_1"
                                             , "VALVE_FEEDER_FWD_2"
-                                            , "VALVE_FEEDER_REV_2"
+                                            , "VALVE_FEEDER_REV_2" // end relay block 1
+                                            , "VALVE_SLIDER_OPEN"
+                                            , "VALVE_SLIDER_CLOSE"
+                                            , "VALVE_MIXER_UP"
+                                            , "VALVE_MIXER_DOWN"
+                                            , "HYRDAULIC_PUMP"
+                                            , "VACUUM_PUMP"
                                             , "BELT_FORWARD"
-                                            , "BELT_REVERSE"
+                                            , "BELT_REVERSE" // end relay block 2
                                             , "RELAY_STATE"
+                                            , "SENSOR_STATE"
                                            };
 
 // Lift at BOTTOM  BIN at LOAD
@@ -105,15 +124,15 @@ void onLiftUpRelay() {
   if (!digitalRead(relayValveLiftUp) == LOW) {
     // Relay is OFF
     if (!isLiftUpFree()) {
-      returnMessage = "0";
+      returnMessage = "ERROR";
     }
     else {
-      returnMessage = "1";
+      returnMessage = "LOW";
       digitalWrite(relayValveLiftUp, LOW);
     }
   }
   else {
-    returnMessage = "0";
+    returnMessage = "HIGH";
     digitalWrite(relayValveLiftUp, HIGH);
   }
 }
@@ -122,88 +141,88 @@ void onLiftDownRelay() {
   if (!digitalRead(relayValveLiftDown) == LOW) {
     if (!isLiftDownFree())
     {
-      returnMessage = "0";
+      returnMessage = "ERROR";
     }
     else
     {
-      returnMessage = "1";
+      returnMessage = "LOW";
       digitalWrite(relayValveLiftDown, LOW);
     }
   }
   else {
-    returnMessage = "0";
+    returnMessage = "HIGH";
     digitalWrite(relayValveLiftDown, HIGH);
   }
 }
 
 void onBinLoad() {
   if (!digitalRead(relayValveBinLoad) == LOW) {
-    returnMessage = "1";
+    returnMessage = "LOW";
     digitalWrite(relayValveBinLoad, LOW);
   }
   else {
-    returnMessage = "0";
+    returnMessage = "HIGH";
     digitalWrite(relayValveBinLoad, HIGH);
   }
 }
 
 void onBinDrop() {
   if (!digitalRead(relayValveBinDrop) == LOW) {
-    returnMessage = "1";
+    returnMessage = "LOW";
     digitalWrite(relayValveBinDrop, LOW);
   }
   else {
-    returnMessage = "0";
+    returnMessage = "HIGH";
     digitalWrite(relayValveBinDrop, HIGH);
   }
 }
 
 void onValveFeederFwd_1() {
   if (!digitalRead(relayValveFeederFwd_1) == LOW) {
-    returnMessage = "1";
+    returnMessage = "LOW";
     digitalWrite(relayValveFeederFwd_1, LOW);
   }
   else {
-    returnMessage = "0";
+    returnMessage = "HIGH";
     digitalWrite(relayValveFeederFwd_1, HIGH);
   }
 }
 
 void onValveFeederRev_1() {
   if (!digitalRead(relayValveFeederRev_1) == LOW) {
-    returnMessage = "1";
+    returnMessage = "LOW";
     digitalWrite(relayValveFeederRev_1, LOW);
   }
   else {
-    returnMessage = "0";
+    returnMessage = "HIGH";
     digitalWrite(relayValveFeederRev_1, HIGH);
   }
 }
 
 void onValveFeederFwd_2() {
   if (!digitalRead(relayValveFeederFwd_2) == LOW) {
-    returnMessage = "1";
+    returnMessage = "LOW";
     digitalWrite(relayValveFeederFwd_2, LOW);
   }
   else {
-    returnMessage = "0";
+    returnMessage = "HIGH";
     digitalWrite(relayValveFeederFwd_2, HIGH);
   }
 }
 
 void onValveFeederRev_2() {
   if (!digitalRead(relayValveFeederRev_2) == LOW) {
-    returnMessage = "1";
+    returnMessage = "LOW";
     digitalWrite(relayValveFeederRev_2, LOW);
   }
   else {
-    returnMessage = "0";
+    returnMessage = "HIGH";
     digitalWrite(relayValveFeederRev_2, HIGH);
   }
 }
 
 void onRequestRelayState() {
-  returnMessage = "";  
+  returnMessage = "";
   char stateCharArray[RELAY_ARRAY_SIZE + 1] = "";
 
   for (int i = 0; i < RELAY_ARRAY_SIZE; i++) {
@@ -216,7 +235,25 @@ void onRequestRelayState() {
       Serial.println("relay high");
     }
   }
-  
+
+  returnMessage = stateCharArray;
+}
+
+void onRequestSensorState() {
+  returnMessage = "";
+  char stateCharArray[SENSOR_ARRAY_SIZE + 1] = "";
+
+  for (int i = 0; i < SENSOR_ARRAY_SIZE; i++) {
+    if (digitalRead(sensorArray[i]) == LOW) {
+      stateCharArray[i] = '1';
+      Serial.println("sensor low");
+    }
+    else {
+      stateCharArray[i] = '0';
+      Serial.println("sensor high");
+    }
+  }
+
   returnMessage = stateCharArray;
 }
 
@@ -256,14 +293,34 @@ void onListenUdpMessage(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src
           onValveFeederRev_2();
           break;
         case 8:
-          //reserved for belt fwd
+          //reserved for valve slider open
           break;
         case 9:
+          //reserved for valve slider close
+          break;
+        case 10:
+          //reserved for valve mixer up
+          break;
+        case 11:
+          //reserved for valve mixer down
+          break;
+        case 12:
+          //reserved for hydraulic pump
+          break;
+        case 13:
+          //reserved for vacuum pump
+          break;
+        case 14:
+          //reserved for belt fwd
+          break;
+        case 15:
           //reserved for belt rev
           break;
-        // !! Will eventually be 17 when other relay block is connected !!
-        case 10:
+        case 16:
           onRequestRelayState();
+          break;
+        case 17:
+          onRequestSensorState();
           break;
       }
     }
@@ -289,6 +346,40 @@ void initializeRelayArray() {
   }
 }
 
+void initializeSensorArray() {
+  sensorArray[0] = sensorLiftBottom;
+  pinMode(sensorLiftBottom, INPUT_PULLUP);
+  sensorArray[1] = sensorLiftTop;
+  pinMode(sensorLiftTop, INPUT_PULLUP);
+
+}
+
+bool isMachineIdle() {
+  // Check if ALL relay are HIGH
+  if (!isRelayCompletelyOff) {
+    returnMessage = "DETECTED LOW RELAY IN BLOCK";
+    return false;
+  }
+  // Check if BIN is at BOTTOM
+  if (!isBinAtLoad()) {
+    returnMessage = "BIN NOT DETECTED AT BOTTOM";
+    return false;
+  }
+
+  return true;
+}
+
+bool isRelayCompletelyOff() {
+  onRequestRelayState();
+  for (int i = 0; i < RELAY_ARRAY_SIZE; i++) {
+    //char *c = ;
+    if (returnMessage[i] == '1') {
+      Serial.println("found relay with state LOW");
+      return false;
+    }
+  }
+  return true;
+}
 void setup() {
   // Register network adapter
   Serial.begin(57600);
@@ -298,17 +389,34 @@ void setup() {
     Serial.println("Failed init adapter");
 
   ether.staticSetup(myip, gwip, NULL, mask);
-  //ether.udpServerListenOnPort(&onListenUdpConfig, port);
   ether.udpServerListenOnPort(&onListenUdpMessage, port);
 
   // Register IO
   initializeRelayArray();
-  pinMode(sensorLiftTop, INPUT_PULLUP);
-  pinMode(sensorLiftBottom, INPUT_PULLUP);
-
+  initializeSensorArray();
 }
 
 void loop() {
+
+  relayLiftUpState = digitalRead(relayValveLiftUp);
+
+  // Relay LIFT UP state has changed
+  if(relayLiftUpState != lastRelayLiftUpState) {
+    // Bin is going up
+    if(relayLiftUpState == LOW) {
+        Serial.println("lift up relay LOW");
+        // IF bin is detected at DROP with sensor LIFT TOP 
+        if(isBinAtDrop()) {
+          // TURN OFF relayValveLiftUp
+          digitalWrite(relayValveLiftUp, HIGH);
+        }
+    }    
+  }
+
+  
+  lastRelayLiftUpState = relayLiftUpState;
+  
+  
   // This must be called for ethercard functions to work.
   ether.packetLoop(ether.packetReceive());
 }
