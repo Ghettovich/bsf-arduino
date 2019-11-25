@@ -16,7 +16,7 @@ static byte mask[] = { 255, 255, 255, 0 };
 // Ethernet MAC address - must be unique on your network
 static byte mymac[] = { 0x70, 0x69, 0x74, 0x2D, 0x30, 0x31 };
 // Server IP
-byte serverIP[] = { 192,168,178,174 };
+static byte serverIP[] = { 192,168,178,174 };
   
 
 // init adapter
@@ -388,9 +388,11 @@ void setup() {
   if (ether.begin(sizeof Ethernet::buffer, mymac, SS) == 0)
     Serial.println("Failed init adapter");
 
-  ether.staticSetup(myip, gwip, NULL, mask);
+  ether.staticSetup(myip, gwip, gwip, mask);
   ether.udpServerListenOnPort(&onListenUdpMessage, port);
   ether.copyIp(ether.hisip, serverIP);
+
+  ether.printIp("srv", ether.hisip); 
 
   // Register IO
   initializeRelayArray();
@@ -401,7 +403,7 @@ void loop() {
 
   if (digitalRead(relayValveLiftUp) == LOW && isBinAtDrop()) {
     digitalWrite(relayValveLiftUp, HIGH);
-    ether.sendUdp(textToSend, sizeof(textToSend), port, ether.hisip, destPort );
+    ether.sendUdp(textToSend, sizeof(textToSend), destPort, ether.hisip, destPort );
   }
   
 
