@@ -1,29 +1,33 @@
 #include <EtherCard.h>
 #include <IPAddress.h>
 
-#define ETHERCARD_UDPSERVER   1
-#define RELAY_ARRAY_SIZE      8
-#define SENSOR_ARRAY_SIZE     2
-#define MESSAGE_ARRAY_SIZE   18
+#define ETHERCARD_UDPSERVER     1
+#define RELAY_ARRAY_SIZE        8
+#define SENSOR_ARRAY_SIZE       2
+#define MESSAGE_ARRAY_SIZE     18
+#define REPLAY_MESSAGE_LENGTH  20
+#define ERROR_MESSAGE_LENGTH   20
 
 /* Network configuration */
-// Ethernet interface IP address
-static byte myip[] = { 192, 168, 178, 23 };
-// Gateway IP address
-static byte gwip[] = { 192, 168, 178, 1 };
-// ethernet interface ip netmask
-static byte mask[] = { 255, 255, 255, 0 };
+// ETHERNET interface IP address
+static uint8_t myip[] = { 192, 168, 178, 23 };
+// GATEWAY IP address
+static uint8_t gwip[] = { 192, 168, 178, 1 };
+// NETMASK
+static uint8_t mask[] = { 255, 255, 255, 0 };
 // Ethernet MAC address - must be unique on your network
-static byte mymac[] = { 0x70, 0x69, 0x74, 0x2D, 0x30, 0x31 };
-// Server IP
-static byte serverIP[] = { 192,168,178,174 };
-  
+static uint8_t mymac[] = { 0x70, 0x69, 0x74, 0x2D, 0x30, 0x31 };
+// SERVER IP
+static uint8_t serverIP[] = { 192, 168, 178, 174 };
+// TCP/IP send and receive buffer
+byte Ethernet::buffer[2000];
 
-// init adapter
-byte Ethernet::buffer[2000]; // TCP/IP send and receive buffer
-// server port
-int port = 12310;
-int destPort = 12300;
+// PORT
+const int port = 12310;
+const int destPort = 12300;
+
+const int nSourcePort = 5000;
+const int nDestinationPort = 5000;
 
 // Relay pin definitions
 int relayValveLiftUp = 22;
@@ -41,6 +45,8 @@ int sensorLiftBottom = 40, sensorLiftTop = 42;
 // ARRAY definitions
 int relayArray[RELAY_ARRAY_SIZE];
 int sensorArray[SENSOR_ARRAY_SIZE];
+
+int oneTimePakket = 1;
 
 //const char *state = "";
 //const char *relayStates = "";
@@ -86,14 +92,14 @@ bool isLiftDownFree() {
     return false;
 }
 // Lift at TOP and BIN at DROP
-static bool isBinAtDrop() {
+bool isBinAtDrop() {
   if (digitalRead(sensorLiftBottom) == HIGH &&
       digitalRead(sensorLiftTop) == LOW)
     return true;
   else
     return false;
 }
-
+// Lift at LOAD position ready for BELT
 bool isBinAtLoad() {
   if (digitalRead(sensorLiftBottom) == LOW)
     return true;
@@ -261,6 +267,7 @@ void onListenUdpMessage(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src
   IPAddress src(src_ip[0], src_ip[1], src_ip[2], src_ip[3]);
 
   String _msg = String(data);
+  Serial.println(data);
 
   for (int i = 0; i < MESSAGE_ARRAY_SIZE; i++) {
     String c = String(messages[i]);
@@ -324,6 +331,7 @@ void onListenUdpMessage(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src
       }
     }
   }
+  // Send reply
   ether.makeUdpReply(returnMessage, strlen(returnMessage), src_port);
 }
 
@@ -388,24 +396,35 @@ void setup() {
   if (ether.begin(sizeof Ethernet::buffer, mymac, SS) == 0)
     Serial.println("Failed init adapter");
 
-  ether.staticSetup(myip, gwip, gwip, mask);
+  ether.staticSetup(myip, gwip, mask);
   ether.udpServerListenOnPort(&onListenUdpMessage, port);
   ether.copyIp(ether.hisip, serverIP);
-
-  ether.printIp("srv", ether.hisip); 
+  ether.copyIp(ether.hisip, serverIP);
+  ether.printIp("srv", ether.hisip);
 
   // Register IO
   initializeRelayArray();
   initializeSensorArray();
+
+  // TEST UDP DATAGRAMS
+//ether.sendUdp(textToSend, sizeof(textToSend), 12300, ether.hisip, 12300 );
 }
 
 void loop() {
 
+  //Serial.println(textToSend);
+
   if (digitalRead(relayValveLiftUp) == LOW && isBinAtDrop()) {
     digitalWrite(relayValveLiftUp, HIGH);
-    ether.sendUdp(textToSend, sizeof(textToSend), destPort, ether.hisip, destPort );
+    char textToSend[] = "BIN_ARRIVED_LOAD";
+    ether.sendUdp(textToSend, sizeof(textToSend), 12300, ether.hisip, 12300);
   }
-  
+  if (digitalRead(relayValveLiftDown) == LOW && isBinAtLoad()) {
+    digitalWrite(relayValveLiftDown, HIGH);
+    char textToSend[] = "BIN_ARRIVED_LOAD";
+    ether.sendUdp(textToSend, sizeof(textToSend), 12300, ether.hisip, 12300 );
+  }
+
 
   // This must be called for ethercard functions to work.
   ether.packetLoop(ether.packetReceive());
