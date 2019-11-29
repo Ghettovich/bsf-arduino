@@ -3,7 +3,9 @@
 
 #define ETHERCARD_UDPSERVER     1
 #define RELAY_ARRAY_SIZE        8
+#define RELAY_STATE_MSG_SIZE   10
 #define SENSOR_ARRAY_SIZE       2
+#define SENSOR_STATE_MSG_SIZE   4
 #define MESSAGE_ARRAY_SIZE     18
 
 /* Network configuration */
@@ -40,11 +42,14 @@ int sensorLiftBottom = 40, sensorLiftTop = 42;
 // ARRAY definitions
 int relayArray[RELAY_ARRAY_SIZE];
 int sensorArray[SENSOR_ARRAY_SIZE];
+
 // STATES
 int liftDownSensorState = 0, prevLiftDownSensorState = 0;
 int liftUpSensorState = 0, prevLiftUpSensorState = 0;
 
 // MESSAGES
+//char * reply;
+
 const char *returnMessage = "";
 const char *messages[MESSAGE_ARRAY_SIZE] = {"LIFT_UP"
                                             , "LIFT_DOWN"
@@ -66,8 +71,12 @@ const char *messages[MESSAGE_ARRAY_SIZE] = {"LIFT_UP"
                                             , "SENSOR_STATE"
                                            };
 
-// REPLIES
-//char textToSend[] = "test 123";
+// IO types
+enum IODeviceType {
+  WEIGHTSENSOR = 1
+  , DETECTIONSENSOR = 2
+  , RELAY = 3
+};
 
 // Lift at BOTTOM  BIN at LOAD
 bool isLiftUpFree() {
@@ -118,7 +127,7 @@ bool isBinBetweenLoadAndDrop() {
     return false;
 }
 
-void onLiftUpRelay() {  
+void onLiftUpRelay() {
   if (!digitalRead(relayValveLiftUp) == LOW) {
     // Relay is OFF
     if (!isLiftUpFree()) {
@@ -219,12 +228,18 @@ void onValveFeederRev_2() {
   }
 }
 
-void onRequestRelayState() {
-  returnMessage = "";
-  char stateCharArray[RELAY_ARRAY_SIZE + 1] = "";
+char * buildRelayStateMsg() {
+  char * buf = (char *) malloc(RELAY_STATE_MSG_SIZE);
+  // +1 for NULL termination
+  char stateCharArray[RELAY_STATE_MSG_SIZE + 1] = "";
+  String deviceType = String(IODeviceType::RELAY);
+  stateCharArray[0] = deviceType.charAt(0);
+  stateCharArray[1] = ',';
+  int posInArray;
 
-  for (int i = 0; i < RELAY_ARRAY_SIZE; i++) {
-    if (digitalRead(relayArray[i]) == LOW) {
+  // str len is usged because first position is needed for number, second for comma (,)
+  for (int i = strlen(stateCharArray); i < RELAY_STATE_MSG_SIZE; i++) {
+    if (digitalRead(relayArray[posInArray]) == LOW) {
       stateCharArray[i] = '1';
       Serial.println("relay low");
     }
@@ -232,60 +247,45 @@ void onRequestRelayState() {
       stateCharArray[i] = '0';
       Serial.println("relay high");
     }
+    posInArray++;
   }
 
-  returnMessage = stateCharArray;
+  strcpy(buf, stateCharArray);
+  return buf;
 }
 
-void createRelayStateArray(char charArray[]) {  
+char * buildDetectionSensorStateMsg() {
+  char * buf = (char *) malloc(SENSOR_STATE_MSG_SIZE);
+  // +1 for NULL termination
+  char sensorStateCharArray[SENSOR_STATE_MSG_SIZE + 1]= "";
+  String deviceType = String(IODeviceType::DETECTIONSENSOR);
+  sensorStateCharArray[0] = deviceType.charAt(0);
+  sensorStateCharArray[1] = ',';
+  int posInArray;
 
-  for (int i = 0; i < RELAY_ARRAY_SIZE; i++) {
-    if (digitalRead(relayArray[i]) == LOW) {
-      charArray[i] = '1';
-      Serial.println("relay low");
+  // str len is usged because first position is needed for number, second for comma (,)
+
+  // HERE STATE MSG SIZE IS USED
+  for (int i = strlen(sensorStateCharArray); i < SENSOR_STATE_MSG_SIZE; i++) {
+    if (digitalRead(sensorArray[posInArray]) == LOW) {
+      sensorStateCharArray[i] = '1';
+      Serial.println("detection sensor low");
     }
     else {
-      charArray[i] = '0';
-      Serial.println("relay high");
+      sensorStateCharArray[i] = '0';
+      Serial.println("detection sensor high");
     }
-  }
-}
-
-void onRequestSensorState() {
-  returnMessage = "";
-  char stateCharArray[SENSOR_ARRAY_SIZE + 1] = "";
-
-  for (int i = 0; i < SENSOR_ARRAY_SIZE; i++) {
-    if (digitalRead(sensorArray[i]) == LOW) {
-      stateCharArray[i] = '1';
-      Serial.println("sensor low");
-    }
-    else {
-      stateCharArray[i] = '0';
-      Serial.println("sensor high");
-    }
+    posInArray++;
   }
 
-  returnMessage = stateCharArray;
+  strcpy(buf, sensorStateCharArray);
+  return buf;
 }
 
-void createSensorStateArray(char charArray[]) {  
-
-  for (int i = 0; i < SENSOR_ARRAY_SIZE; i++) {
-    if (digitalRead(sensorArray[i]) == LOW) {
-      charArray[i] = '1';
-      Serial.println("sensor low");
-    }
-    else {
-      charArray[i] = '0';
-      Serial.println("sensor high");
-    }
-  }
-}
 
 void onListenUdpMessage(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_port, const char *data, uint16_t len) {
   IPAddress src(src_ip[0], src_ip[1], src_ip[2], src_ip[3]);
-  Serial.println(data);  
+  Serial.println(data);
   String _msg = String(data);
 
   for (int i = 0; i < MESSAGE_ARRAY_SIZE; i++) {
@@ -341,15 +341,18 @@ void onListenUdpMessage(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src
         case 15:
           //reserved for belt rev
           break;
-        case 16:          
-          onRequestRelayState();
+        case 16:
+          returnMessage = buildRelayStateMsg();
+          //onRequestRelayState();
           break;
         case 17:
-          onRequestSensorState();
+          returnMessage = buildDetectionSensorStateMsg();
+          //onRequestDetectionSensorState();
           break;
       }
     }
   }
+  Serial.println(returnMessage);
   // Send reply
   ether.makeUdpReply(returnMessage, strlen(returnMessage), src_port);
 }
@@ -379,33 +382,6 @@ void initializeSensorArray() {
   pinMode(sensorArray[1], INPUT_PULLUP);
 }
 
-bool isMachineIdle() {
-  // Check if ALL relay are HIGH
-  if (!isRelayCompletelyOff) {
-    returnMessage = "DETECTED LOW RELAY IN BLOCK";
-    return false;
-  }
-  // Check if BIN is at BOTTOM
-  if (!isBinAtLoad()) {
-    returnMessage = "BIN NOT DETECTED AT BOTTOM";
-    return false;
-  }
-
-  return true;
-}
-
-bool isRelayCompletelyOff() {
-  onRequestRelayState();
-  for (int i = 0; i < RELAY_ARRAY_SIZE; i++) {
-    //char *c = ;
-    if (returnMessage[i] == '1') {
-      Serial.println("found relay with state LOW");
-      return false;
-    }
-  }
-  return true;
-}
-
 void setup() {
   // Register network adapter
   Serial.begin(57600);
@@ -417,8 +393,8 @@ void setup() {
   ether.staticSetup(myip, gwip, mask);
   // BIND EVENTS
   ether.udpServerListenOnPort(&onListenUdpMessage, port);
-  
-  // SET SERVER CONFIG  
+
+  // SET SERVER CONFIG
   ether.copyIp(ether.hisip, serverIP);
   ether.printIp("srv", ether.hisip);
 
@@ -428,43 +404,49 @@ void setup() {
 }
 
 void loop() {
-
-  liftDownSensorState = digitalRead(sensorLiftBottom);
-  if(liftDownSensorState != prevLiftDownSensorState) {   
-    
-    char stateCharArray[SENSOR_ARRAY_SIZE + 1] = "";    
-    createSensorStateArray(stateCharArray);
-    ether.sendUdp(stateCharArray, sizeof(stateCharArray), destPort, ether.hisip, destPort);
-    Serial.println("lift down sensor flipped");
-    Serial.println(stateCharArray);
-  }
-
-  liftUpSensorState = digitalRead(sensorLiftTop);
-
-  if(liftUpSensorState != prevLiftUpSensorState) {
-    char stateCharArray[SENSOR_ARRAY_SIZE + 1] = "";    
-    createSensorStateArray(stateCharArray);
-    ether.sendUdp(stateCharArray, sizeof(stateCharArray), destPort, ether.hisip, destPort);
-    Serial.println("lift down sensor flipped");
-    Serial.println(stateCharArray);
-  }
-  
-  if (digitalRead(relayValveLiftUp) == LOW && isBinAtDrop()) {
-    digitalWrite(relayValveLiftUp, HIGH);
-    char stateCharArray[RELAY_ARRAY_SIZE + 1] = "";
-    createRelayStateArray(stateCharArray);
-    ether.sendUdp(stateCharArray, sizeof(stateCharArray), destPort, ether.hisip, destPort);
-  }
-  if (digitalRead(relayValveLiftDown) == LOW && isBinAtLoad()) {
-    digitalWrite(relayValveLiftDown, HIGH);
-    char stateCharArray[RELAY_ARRAY_SIZE + 1] = "";
-    createRelayStateArray(stateCharArray);    
-    ether.sendUdp(stateCharArray, sizeof(stateCharArray), destPort, ether.hisip, destPort );
-  }
   // This must be called for ethercard functions to work.
   ether.packetLoop(ether.packetReceive());
 
-  // SET last States 
+  //SENSORS
+  liftDownSensorState = digitalRead(sensorLiftBottom);
+  if (liftDownSensorState != prevLiftDownSensorState) {
+    char * reply = buildDetectionSensorStateMsg();
+    ether.sendUdp(reply, strlen(reply), destPort, ether.hisip, destPort);
+    Serial.println(reply);
+    Serial.println("lift down sensor flipped");
+  }
+
+  liftUpSensorState = digitalRead(sensorLiftTop);
+  if (liftUpSensorState != prevLiftUpSensorState) {
+    char * reply = buildDetectionSensorStateMsg();
+    ether.sendUdp(reply, strlen(reply), destPort, ether.hisip, destPort);
+    Serial.println(reply);
+    Serial.println("lift down sensor flipped");
+  }
+
+  // RELAYS
+  if (digitalRead(relayValveLiftUp) == LOW && isBinAtDrop()) {
+    digitalWrite(relayValveLiftUp, HIGH);
+    char * reply = buildRelayStateMsg();
+    Serial.println("change detected");
+    Serial.println(reply);
+    //createRelayStateArray(stateCharArray);
+    ether.sendUdp(reply, strlen(reply), destPort, ether.hisip, destPort);
+    //free(reply);
+  }
+  if (digitalRead(relayValveLiftDown) == LOW && isBinAtLoad()) {
+    digitalWrite(relayValveLiftDown, HIGH);
+    //char stateCharArray[RELAY_ARRAY_SIZE + 1] = "";
+    char * reply = buildRelayStateMsg();
+    Serial.println("change detected");
+    Serial.println(reply);
+    //createRelayStateArray(stateCharArray);
+    ether.sendUdp(reply, strlen(reply), destPort, ether.hisip, destPort );
+    //free(reply);
+  }
+
+
+  // SET last States
   prevLiftDownSensorState = liftDownSensorState;
   prevLiftUpSensorState = liftUpSensorState;
 }
