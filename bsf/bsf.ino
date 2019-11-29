@@ -5,8 +5,6 @@
 #define RELAY_ARRAY_SIZE        8
 #define SENSOR_ARRAY_SIZE       2
 #define MESSAGE_ARRAY_SIZE     18
-#define REPLAY_MESSAGE_LENGTH  20
-#define ERROR_MESSAGE_LENGTH   20
 
 /* Network configuration */
 // ETHERNET interface IP address
@@ -26,10 +24,7 @@ byte Ethernet::buffer[2000];
 const int port = 12310;
 const int destPort = 12300;
 
-const int nSourcePort = 5000;
-const int nDestinationPort = 5000;
-
-// Relay pin definitions
+// RELAY pin definitions
 int relayValveLiftUp = 22;
 int relayValveLiftDown = 24;
 int relayValveBinLoad = 26;
@@ -45,11 +40,11 @@ int sensorLiftBottom = 40, sensorLiftTop = 42;
 // ARRAY definitions
 int relayArray[RELAY_ARRAY_SIZE];
 int sensorArray[SENSOR_ARRAY_SIZE];
+// STATES
+int liftDownSensorState = 0, prevLiftDownSensorState = 0;
+int liftUpSensorState = 0, prevLiftUpSensorState = 0;
 
-int oneTimePakket = 1;
-
-//const char *state = "";
-//const char *relayStates = "";
+// MESSAGES
 const char *returnMessage = "";
 const char *messages[MESSAGE_ARRAY_SIZE] = {"LIFT_UP"
                                             , "LIFT_DOWN"
@@ -72,7 +67,7 @@ const char *messages[MESSAGE_ARRAY_SIZE] = {"LIFT_UP"
                                            };
 
 // REPLIES
-char textToSend[] = "test 123";
+//char textToSend[] = "test 123";
 
 // Lift at BOTTOM  BIN at LOAD
 bool isLiftUpFree() {
@@ -106,7 +101,6 @@ bool isBinAtLoad() {
   else
     return false;
 }
-
 // Lift  between sensors operator action required
 bool isLiftBetweenBottomAndTop() {
   if (digitalRead(sensorLiftBottom) == HIGH &&
@@ -115,7 +109,6 @@ bool isLiftBetweenBottomAndTop() {
   else
     return false;
 }
-
 // BIN between sensors operator action required
 bool isBinBetweenLoadAndDrop() {
   if (digitalRead(sensorLiftBottom) == HIGH &&
@@ -125,7 +118,7 @@ bool isBinBetweenLoadAndDrop() {
     return false;
 }
 
-void onLiftUpRelay() {
+void onLiftUpRelay() {  
   if (!digitalRead(relayValveLiftUp) == LOW) {
     // Relay is OFF
     if (!isLiftUpFree()) {
@@ -244,6 +237,20 @@ void onRequestRelayState() {
   returnMessage = stateCharArray;
 }
 
+void createRelayStateArray(char charArray[]) {  
+
+  for (int i = 0; i < RELAY_ARRAY_SIZE; i++) {
+    if (digitalRead(relayArray[i]) == LOW) {
+      charArray[i] = '1';
+      Serial.println("relay low");
+    }
+    else {
+      charArray[i] = '0';
+      Serial.println("relay high");
+    }
+  }
+}
+
 void onRequestSensorState() {
   returnMessage = "";
   char stateCharArray[SENSOR_ARRAY_SIZE + 1] = "";
@@ -262,12 +269,24 @@ void onRequestSensorState() {
   returnMessage = stateCharArray;
 }
 
+void createSensorStateArray(char charArray[]) {  
+
+  for (int i = 0; i < SENSOR_ARRAY_SIZE; i++) {
+    if (digitalRead(sensorArray[i]) == LOW) {
+      charArray[i] = '1';
+      Serial.println("sensor low");
+    }
+    else {
+      charArray[i] = '0';
+      Serial.println("sensor high");
+    }
+  }
+}
 
 void onListenUdpMessage(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_port, const char *data, uint16_t len) {
   IPAddress src(src_ip[0], src_ip[1], src_ip[2], src_ip[3]);
-
+  Serial.println(data);  
   String _msg = String(data);
-  Serial.println(data);
 
   for (int i = 0; i < MESSAGE_ARRAY_SIZE; i++) {
     String c = String(messages[i]);
@@ -322,7 +341,7 @@ void onListenUdpMessage(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src
         case 15:
           //reserved for belt rev
           break;
-        case 16:
+        case 16:          
           onRequestRelayState();
           break;
         case 17:
@@ -358,7 +377,6 @@ void initializeSensorArray() {
   pinMode(sensorArray[0], INPUT_PULLUP);
   sensorArray[1] = sensorLiftTop;
   pinMode(sensorArray[1], INPUT_PULLUP);
-
 }
 
 bool isMachineIdle() {
@@ -395,37 +413,58 @@ void setup() {
   // Change 'SS' to your Slave Select pin if you aren't using the default pin
   if (ether.begin(sizeof Ethernet::buffer, mymac, SS) == 0)
     Serial.println("Failed init adapter");
-
+  // SETUP STATIC IP
   ether.staticSetup(myip, gwip, mask);
+  // BIND EVENTS
   ether.udpServerListenOnPort(&onListenUdpMessage, port);
-  ether.copyIp(ether.hisip, serverIP);
+  
+  // SET SERVER CONFIG  
   ether.copyIp(ether.hisip, serverIP);
   ether.printIp("srv", ether.hisip);
 
   // Register IO
   initializeRelayArray();
   initializeSensorArray();
-
-  // TEST UDP DATAGRAMS
-//ether.sendUdp(textToSend, sizeof(textToSend), 12300, ether.hisip, 12300 );
 }
 
 void loop() {
 
-  //Serial.println(textToSend);
+  liftDownSensorState = digitalRead(sensorLiftBottom);
+  if(liftDownSensorState != prevLiftDownSensorState) {   
+    
+    char stateCharArray[SENSOR_ARRAY_SIZE + 1] = "";    
+    createSensorStateArray(stateCharArray);
+    ether.sendUdp(stateCharArray, sizeof(stateCharArray), destPort, ether.hisip, destPort);
+    Serial.println("lift down sensor flipped");
+    Serial.println(stateCharArray);
+  }
 
+  liftUpSensorState = digitalRead(sensorLiftTop);
+
+  if(liftUpSensorState != prevLiftUpSensorState) {
+    char stateCharArray[SENSOR_ARRAY_SIZE + 1] = "";    
+    createSensorStateArray(stateCharArray);
+    ether.sendUdp(stateCharArray, sizeof(stateCharArray), destPort, ether.hisip, destPort);
+    Serial.println("lift down sensor flipped");
+    Serial.println(stateCharArray);
+  }
+  
   if (digitalRead(relayValveLiftUp) == LOW && isBinAtDrop()) {
     digitalWrite(relayValveLiftUp, HIGH);
-    char textToSend[] = "BIN_ARRIVED_LOAD";
-    ether.sendUdp(textToSend, sizeof(textToSend), 12300, ether.hisip, 12300);
+    char stateCharArray[RELAY_ARRAY_SIZE + 1] = "";
+    createRelayStateArray(stateCharArray);
+    ether.sendUdp(stateCharArray, sizeof(stateCharArray), destPort, ether.hisip, destPort);
   }
   if (digitalRead(relayValveLiftDown) == LOW && isBinAtLoad()) {
     digitalWrite(relayValveLiftDown, HIGH);
-    char textToSend[] = "BIN_ARRIVED_LOAD";
-    ether.sendUdp(textToSend, sizeof(textToSend), 12300, ether.hisip, 12300 );
+    char stateCharArray[RELAY_ARRAY_SIZE + 1] = "";
+    createRelayStateArray(stateCharArray);    
+    ether.sendUdp(stateCharArray, sizeof(stateCharArray), destPort, ether.hisip, destPort );
   }
-
-
   // This must be called for ethercard functions to work.
   ether.packetLoop(ether.packetReceive());
+
+  // SET last States 
+  prevLiftDownSensorState = liftDownSensorState;
+  prevLiftUpSensorState = liftUpSensorState;
 }
