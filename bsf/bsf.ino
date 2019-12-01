@@ -282,7 +282,6 @@ char * buildDetectionSensorStateMsg() {
   return buf;
 }
 
-
 void onListenUdpMessage(uint16_t dest_port, uint8_t src_ip[IP_LEN], uint16_t src_port, const char *data, uint16_t len) {
   IPAddress src(src_ip[0], src_ip[1], src_ip[2], src_ip[3]);
   Serial.println(data);
