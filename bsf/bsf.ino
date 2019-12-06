@@ -1,12 +1,13 @@
 #include <EtherCard.h>
 #include <IPAddress.h>
 
-#define ETHERCARD_UDPSERVER     1
-#define RELAY_ARRAY_SIZE        8
-#define RELAY_STATE_MSG_SIZE   10
-#define SENSOR_ARRAY_SIZE       2
-#define SENSOR_STATE_MSG_SIZE   4
-#define MESSAGE_ARRAY_SIZE     18
+#define ETHERCARD_UDPSERVER          1
+#define RELAY_ARRAY_SIZE             8
+#define RELAY_STATE_MSG_SIZE        10
+#define SENSOR_ARRAY_SIZE            2
+#define SENSOR_STATE_MSG_SIZE        4
+#define MESSAGE_ARRAY_SIZE          18
+#define OPERATOR_MSG_ARRAY_SIZE      2
 
 /* Network configuration */
 // ETHERNET interface IP address
@@ -18,7 +19,7 @@ static uint8_t mask[] = { 255, 255, 255, 0 };
 // Ethernet MAC address - must be unique on your network
 static uint8_t mymac[] = { 0x70, 0x69, 0x74, 0x2D, 0x30, 0x31 };
 // SERVER IP
-static uint8_t serverIP[] = { 192, 168, 178, 174 };
+static uint8_t serverIP[] = { 192, 168, 178, 231 };
 // TCP/IP send and receive buffer
 byte Ethernet::buffer[2000];
 
@@ -37,19 +38,25 @@ int relayValveFeederFwd_2 = 34;
 int relayValveFeederRev_2 = 36;
 
 // INPUT proximity switches !!! if LOW detection !!!
-int sensorLiftBottom = 40, sensorLiftTop = 42;
+int sensorLiftBottom = 20, sensorLiftTop = 21;
 
 // ARRAY definitions
 int relayArray[RELAY_ARRAY_SIZE];
 int sensorArray[SENSOR_ARRAY_SIZE];
 
-// STATES
-int liftDownSensorState = 0, prevLiftDownSensorState = 0;
-int liftUpSensorState = 0, prevLiftUpSensorState = 0;
+// TIMER VALUES
+unsigned long startTimeLiftUp, startTimeOperatorNotified;
+long maxTimeLiftNotDetected = 3000; // 3 seconds
+long notifyOperatorInterval = 1500;
+bool isOperatorInformed = false;
+
+
+// LEDS
+int boardLedPin = 13;
 
 // MESSAGES
-//char * reply;
-
+char * reply;
+char * operatorMessage;
 const char *returnMessage = "";
 const char *messages[MESSAGE_ARRAY_SIZE] = {"LIFT_UP"
                                             , "LIFT_DOWN"
@@ -70,12 +77,19 @@ const char *messages[MESSAGE_ARRAY_SIZE] = {"LIFT_UP"
                                             , "RELAY_STATE"
                                             , "SENSOR_STATE"
                                            };
-
+const char *operatorActionMsg[OPERATOR_MSG_ARRAY_SIZE] = {"LIFT_STUCK"
+                                                          , "BIN_STUCK"
+                                                         };
 // IO types
 enum IODeviceType {
   WEIGHTSENSOR = 1
   , DETECTIONSENSOR = 2
   , RELAY = 3
+};
+
+enum ErrorCode {
+  LIFT_STUCK = 90
+  , BIN_STUCK = 91
 };
 
 // Lift at BOTTOM  BIN at LOAD
@@ -86,7 +100,6 @@ bool isLiftUpFree() {
   else
     return false;
 }
-
 // Lift at TOP  BIN at LOAD
 bool isLiftDownFree() {
   if (digitalRead(sensorLiftBottom) == HIGH &&
@@ -126,7 +139,7 @@ bool isBinBetweenLoadAndDrop() {
   else
     return false;
 }
-
+// received instruction to send lift UP to position BIN DROP
 void onLiftUpRelay() {
   if (!digitalRead(relayValveLiftUp) == LOW) {
     // Relay is OFF
@@ -143,7 +156,7 @@ void onLiftUpRelay() {
     digitalWrite(relayValveLiftUp, HIGH);
   }
 }
-
+// received instruction to send lift DOWN to LOAD
 void onLiftDownRelay() {
   if (!digitalRead(relayValveLiftDown) == LOW) {
     if (!isLiftDownFree())
@@ -161,7 +174,7 @@ void onLiftDownRelay() {
     digitalWrite(relayValveLiftDown, HIGH);
   }
 }
-
+// set BIN in LOAD position
 void onBinLoad() {
   if (!digitalRead(relayValveBinLoad) == LOW) {
     returnMessage = "LOW";
@@ -172,7 +185,7 @@ void onBinLoad() {
     digitalWrite(relayValveBinLoad, HIGH);
   }
 }
-
+// set bin in DROP position
 void onBinDrop() {
   if (!digitalRead(relayValveBinDrop) == LOW) {
     returnMessage = "LOW";
@@ -257,7 +270,7 @@ char * buildRelayStateMsg() {
 char * buildDetectionSensorStateMsg() {
   char * buf = (char *) malloc(SENSOR_STATE_MSG_SIZE);
   // +1 for NULL termination
-  char sensorStateCharArray[SENSOR_STATE_MSG_SIZE + 1]= "";
+  char sensorStateCharArray[SENSOR_STATE_MSG_SIZE + 1] = "";
   String deviceType = String(IODeviceType::DETECTIONSENSOR);
   sensorStateCharArray[0] = deviceType.charAt(0);
   sensorStateCharArray[1] = ',';
@@ -379,6 +392,45 @@ void initializeSensorArray() {
   pinMode(sensorArray[0], INPUT_PULLUP);
   sensorArray[1] = sensorLiftTop;
   pinMode(sensorArray[1], INPUT_PULLUP);
+
+  // ATTACH INTERRUPT EVENTS
+  attachInterrupt(digitalPinToInterrupt(sensorLiftBottom), onChangeSensorLiftBottom, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(sensorLiftTop), onChangeSensorLiftTop, CHANGE);
+}
+
+void onChangeSensorLiftBottom() {
+  reply = buildDetectionSensorStateMsg();
+  ether.sendUdp(reply, strlen(reply), destPort, ether.hisip, destPort);
+
+  Serial.println(reply);
+  Serial.println("lift down sensor flipped");
+
+  if (!digitalRead(sensorLiftBottom) == LOW) {
+    Serial.println("lift not detected, started timer");
+    startTimeLiftUp = millis();
+    // set onboard led HIGH
+    digitalWrite(boardLedPin, LOW);
+  }
+  else {
+    Serial.println("sensor BOTTOM LOW reset timer");
+    startTimeLiftUp = 0;
+    digitalWrite(boardLedPin, HIGH);
+  }
+}
+
+void onChangeSensorLiftTop() {
+  reply = buildDetectionSensorStateMsg();
+  ether.sendUdp(reply, strlen(reply), destPort, ether.hisip, destPort);
+  Serial.println("lift top sensor flipped");
+
+  if (!digitalRead(sensorLiftBottom) == LOW) {
+    Serial.println("lift not detected, started timer");
+    startTimeLiftUp = millis();
+  }
+  else {
+    Serial.println("sensor TOP LOW reset timer");
+    startTimeLiftUp = 0;
+  }
 }
 
 void setup() {
@@ -400,52 +452,81 @@ void setup() {
   // Register IO
   initializeRelayArray();
   initializeSensorArray();
+
+  // init build in LED
+  pinMode(boardLedPin, OUTPUT);
+}
+// Check if lift is stuck and the timer has passed
+bool isLiftStuck() {
+  // if for some reason the lift is stuck (both sensors are HIGH) operator action required
+  if (digitalRead(sensorLiftBottom) == HIGH
+      && digitalRead(sensorLiftTop) == HIGH
+      && millis() - startTimeLiftUp > maxTimeLiftNotDetected) {
+    //Serial.println("lift time out, notify operator");
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+
+void onLiftArrive() {
+
+  // BIN arrived at DROP position, set relay HIGH
+  if (digitalRead(relayValveLiftUp) == LOW && isBinAtDrop()) {
+    digitalWrite(relayValveLiftUp, HIGH);
+    isOperatorInformed = false;
+    char * reply = buildRelayStateMsg();
+    Serial.println("bin arrived at drop");
+    Serial.println(reply);
+    //createRelayStateArray(stateCharArray);
+    ether.sendUdp(reply, strlen(reply), destPort, ether.hisip, destPort);
+    //free(reply);
+  }
+  // BIN arrived at LOAD position, set relay HIGH
+  if (digitalRead(relayValveLiftDown) == LOW && isBinAtLoad()) {
+    digitalWrite(relayValveLiftDown, HIGH);
+    isOperatorInformed = false;
+    //char stateCharArray[RELAY_ARRAY_SIZE + 1] = "";
+    char * reply = buildRelayStateMsg();
+    Serial.println("bin arrived at load");
+    Serial.println(reply);
+    //createRelayStateArray(stateCharArray);
+    ether.sendUdp(reply, strlen(reply), destPort, ether.hisip, destPort);
+  }
+}
+
+void notifyOperator(int error) {
+
+  if (error == ErrorCode::LIFT_STUCK) {
+    char reply[20] = "90,LIFT_STUCK";
+
+    if (!isOperatorInformed) {
+      startTimeOperatorNotified = millis();
+      Serial.println("operator not informed, timer started, first notification");
+      Serial.println(reply);
+      //Serial.println(msg);
+      ether.sendUdp(reply, strlen(reply), destPort, ether.hisip, destPort);
+      // set operator informed true
+      isOperatorInformed = true;
+    }
+    if (isOperatorInformed
+        && millis() - startTimeOperatorNotified > notifyOperatorInterval) {
+      startTimeOperatorNotified = millis();
+      Serial.println("second notification");
+      Serial.println(reply);
+      //char reply[11] = "LIFT_STUCK";
+      ether.sendUdp(reply, strlen(reply), destPort, ether.hisip, destPort );
+    }
+  }
 }
 
 void loop() {
   // This must be called for ethercard functions to work.
   ether.packetLoop(ether.packetReceive());
 
-  //SENSORS
-  liftDownSensorState = digitalRead(sensorLiftBottom);
-  if (liftDownSensorState != prevLiftDownSensorState) {
-    char * reply = buildDetectionSensorStateMsg();
-    ether.sendUdp(reply, strlen(reply), destPort, ether.hisip, destPort);
-    Serial.println(reply);
-    Serial.println("lift down sensor flipped");
+  if (isLiftStuck()) {
+    notifyOperator(ErrorCode::LIFT_STUCK);
   }
-
-  liftUpSensorState = digitalRead(sensorLiftTop);
-  if (liftUpSensorState != prevLiftUpSensorState) {
-    char * reply = buildDetectionSensorStateMsg();
-    ether.sendUdp(reply, strlen(reply), destPort, ether.hisip, destPort);
-    Serial.println(reply);
-    Serial.println("lift down sensor flipped");
-  }
-
-  // RELAYS
-  if (digitalRead(relayValveLiftUp) == LOW && isBinAtDrop()) {
-    digitalWrite(relayValveLiftUp, HIGH);
-    char * reply = buildRelayStateMsg();
-    Serial.println("change detected");
-    Serial.println(reply);
-    //createRelayStateArray(stateCharArray);
-    ether.sendUdp(reply, strlen(reply), destPort, ether.hisip, destPort);
-    //free(reply);
-  }
-  if (digitalRead(relayValveLiftDown) == LOW && isBinAtLoad()) {
-    digitalWrite(relayValveLiftDown, HIGH);
-    //char stateCharArray[RELAY_ARRAY_SIZE + 1] = "";
-    char * reply = buildRelayStateMsg();
-    Serial.println("change detected");
-    Serial.println(reply);
-    //createRelayStateArray(stateCharArray);
-    ether.sendUdp(reply, strlen(reply), destPort, ether.hisip, destPort );
-    //free(reply);
-  }
-
-
-  // SET last States
-  prevLiftDownSensorState = liftDownSensorState;
-  prevLiftUpSensorState = liftUpSensorState;
+  onLiftArrive();
 }
