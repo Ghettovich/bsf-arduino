@@ -4,7 +4,7 @@
 #define RELAY_STATE_MSG_SIZE     10
 #define DSENSOR_STATE_MSG_SIZE    4
 #define IO_DEVICE_COUNT          10
-#define STATE_MSG_SIZE           70
+#define STATE_MSG_SIZE         1000
 
 
 /** W5100 Ethernet Interface (optional parameter pin nr. default ok. */
@@ -149,27 +149,40 @@ static void initializeIODeviceStructStub() {
 
 /** CREATE STATE CHAR ARRAY */
 static void createIOTypeStateArray(int typeId, char buf[]) {  
-  String stateMessage = "";
-
+  String stateMessage = "{\"iodevices\": {";
+  stateMessage.concat("\"items\":[");
+  
   for (int i = 0; i < IO_DEVICE_COUNT; i++) {
    
+   stateMessage.concat("{\"id\":");
    stateMessage.concat(devices[i].id);
    stateMessage.concat(',');
+   stateMessage.concat("\"actionId\":");
    stateMessage.concat(devices[i].actionId);
    stateMessage.concat(',');
+   stateMessage.concat("\"typeId\":");
    stateMessage.concat(devices[i].typeId);
    stateMessage.concat(',');
+   stateMessage.concat("\"low\":");
     
    if(digitalRead(devices[i].pinNr) == LOW) {
-     stateMessage.concat('1');
-     Serial.println("got low val");
+     stateMessage.concat(1);
+     //Serial.println("got low val");
    }
    else if(digitalRead(devices[i].pinNr) == HIGH) {
-     stateMessage.concat('0');
+     stateMessage.concat(0);
    }
-   // Mark EOL
-   stateMessage.concat(" ");
+   if(i == IO_DEVICE_COUNT -1) {
+     stateMessage.concat("}]");
+   }
+   else {
+     stateMessage.concat("},"); 
+   }
+   
   }
+
+  stateMessage.concat("}}");  
+  
   
   int len = stateMessage.length();
   stateMessage.toCharArray(buf, len + 1); // + 1 in case we reached max for null termination
@@ -259,6 +272,12 @@ void loop() {
 //    http.printHeaders(http.typeHtml);
 //    http.println(F("<h1>Reserve for state request?</h1>"));
 //    http.sendReply();
+  }
+  else if(http.isGet(F("/relay/lift-up")) {
+    
+  }
+  else if(http.isGet(F("/relay/lift-down")) {
+    
   }
   else if (http.isGet(F("/relay-state"))) {
     sendRelayStatePacket();
