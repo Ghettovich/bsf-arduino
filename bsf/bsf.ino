@@ -111,7 +111,26 @@ bool isBinDetected() {
     return false;
   }
 }
+bool isLiftAsc() {
+  if(digitalRead(relayValveLiftUp) == LOW)
+    return true;  
+  else 
+    return false;  
+}
+bool isLiftDesc() {
+  if(digitalRead(relayValveLiftDown) == LOW)
+    return true;  
+  else 
+    return false;  
+}
+// 
 // END BOOL OPERATIONS LIFT
+/** SET STATE */
+static void setState(StateCode newState) {
+  prevState = currentState;
+  currentState = newState;
+}
+// END SET STATE
 
 /** INITIALIZE STRUCTS */
 // Initialize IODevice struct stub
@@ -148,12 +167,40 @@ static void initializeIODeviceStructStub() {
 // END STRUCT
 
 /** CREATE STATE CHAR ARRAY */
-static void createIOTypeStateArray(int typeId, char buf[]) {  
-  String stateMessage = "{\"iodevices\": {";
+static void createStateCodeArray(char buf[]) {  
+  determineCurrentState();
+  String state = "{\"state\":";
+
+  if(currentState == StateCode::READY) {
+    state.concat(StateCode::READY);
+  }
+  else if(currentState == StateCode::LIFT_ASC) {
+    state.concat(StateCode::LIFT_ASC);
+  }
+  else if(currentState == StateCode::LIFT_DESC) {
+    state.concat(StateCode::LIFT_DESC);
+  }
+  else if(currentState == StateCode::LIFT_STUCK) {
+    state.concat(StateCode::LIFT_STUCK);
+  }
+  else {
+    Serial.println("no known state");
+  }
+
+  state.concat(',');
+  state.toCharArray(buf, state.length() +1);
+}
+
+static void createIOTypeStateArray(int typeId, char buf[]) { 
+  char state[100];
+  createStateCodeArray(state);
+  String stateMessage = String(state);
+
+  stateMessage.concat("\"iodevices\": {");
+  //String stateMessage = "{\"iodevices\": {";
   stateMessage.concat("\"items\":[");
   
-  for (int i = 0; i < IO_DEVICE_COUNT; i++) {
-   
+  for (int i = 0; i < IO_DEVICE_COUNT; i++) {   
    stateMessage.concat("{\"id\":");
    stateMessage.concat(devices[i].id);
    stateMessage.concat(',');
@@ -181,8 +228,7 @@ static void createIOTypeStateArray(int typeId, char buf[]) {
    
   }
 
-  stateMessage.concat("}}");  
-  
+  stateMessage.concat("}}");    
   
   int len = stateMessage.length();
   stateMessage.toCharArray(buf, len + 1); // + 1 in case we reached max for null termination
@@ -229,6 +275,34 @@ void onChangeSensorLiftBottom() {
 void onChangeSensorLiftTop() {
   Serial.println("sensor top flipped");
 }
+// END SENSOR STATE CHANGE
+
+/** TURN ON/OFF RELAYS */
+// received instruction to send lift UP to position BIN DROP
+void onLiftUpRelay() {
+  if (!digitalRead(relayValveLiftUp) == LOW) {    
+    if (isLiftUpFree()) {
+      setState(StateCode::LIFT_ASC);
+      digitalWrite(relayValveLiftUp, LOW);
+    }
+  }
+  else {
+    digitalWrite(relayValveLiftUp, HIGH);
+  }
+}
+// received instruction to send lift DOWN to LOAD
+void onLiftDownRelay() {
+  if (!digitalRead(relayValveLiftDown) == LOW) {
+    if (isLiftDownFree()) {
+      setState(StateCode::LIFT_DESC);
+      digitalWrite(relayValveLiftDown, LOW);
+    }
+  }
+  else {
+    // set state to ready here??
+    digitalWrite(relayValveLiftDown, HIGH);
+  }
+}
 
 /** ARDUINO SETUP AND LOOP METHOD */
 void setup() {
@@ -258,10 +332,23 @@ void setup() {
   startTimeLiftUp = millis();
 
   //init arrays
-  //initializeRelayArray();
+  setState(StateCode::READY);
 
   initializeIODeviceStructStub();
   Serial.println("Ready.");
+}
+
+static void determineCurrentState() {
+  if(isLiftAsc()) {
+    setState(StateCode::LIFT_ASC);
+  }
+  else if (isLiftDesc()) {
+    setState(StateCode::LIFT_DESC);
+  }
+  else {
+    setState(StateCode::READY);
+  }
+  // if timer lift passed it is stuck
 }
 
 void loop() {
@@ -269,15 +356,14 @@ void loop() {
 
   if (http.isGet(F("/"))) {
     sendFullStatePayloadPacket();
-//    http.printHeaders(http.typeHtml);
-//    http.println(F("<h1>Reserve for state request?</h1>"));
-//    http.sendReply();
   }
-  else if(http.isGet(F("/relay/lift-up")) {
-    
+  else if(http.isGet(F("/relay/lift-up"))) {
+    onLiftUpRelay();
+    sendFullStatePayloadPacket();
   }
-  else if(http.isGet(F("/relay/lift-down")) {
-    
+  else if(http.isGet(F("/relay/lift-down"))) {
+    onLiftDownRelay();
+    sendFullStatePayloadPacket();
   }
   else if (http.isGet(F("/relay-state"))) {
     sendRelayStatePacket();
@@ -298,7 +384,7 @@ void loop() {
   if ((long)millis() - startTimeLiftUp > nextMessage) {
     Serial.println("Lift timer passed.\nReset timer and send udp packet");
     nextMessage = millis() + 10000;
-
+    determineCurrentState();
     Serial.println("Sending UDP.");
     char stateArray[STATE_MSG_SIZE];
     createIOTypeStateArray(0, stateArray);
@@ -307,4 +393,6 @@ void loop() {
     udp.send();
 
   }
+
+  prevState = currentState;
 }
