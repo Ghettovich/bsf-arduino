@@ -54,10 +54,12 @@ enum StateCode { READY = 0
 , BIN_LOADING = 3
 , BIN_DUMPING = 4
 , LIFT_STUCK = 90
-, BIN_STUCK = 91};
+, BIN_STUCK = 91
+               };
 enum IODeviceType {WEIGHTSENSOR = 1
 , DETECTIONSENSOR = 2
-, RELAY = 3};
+, RELAY = 3
+                  };
 
 // END GLOBAL VAR
 
@@ -112,18 +114,18 @@ bool isBinDetected() {
   }
 }
 bool isLiftAsc() {
-  if(digitalRead(relayValveLiftUp) == LOW)
-    return true;  
-  else 
-    return false;  
+  if (digitalRead(relayValveLiftUp) == LOW)
+    return true;
+  else
+    return false;
 }
 bool isLiftDesc() {
-  if(digitalRead(relayValveLiftDown) == LOW)
-    return true;  
-  else 
-    return false;  
+  if (digitalRead(relayValveLiftDown) == LOW)
+    return true;
+  else
+    return false;
 }
-// 
+//
 // END BOOL OPERATIONS LIFT
 /** SET STATE */
 static void setState(StateCode newState) {
@@ -167,20 +169,20 @@ static void initializeIODeviceStructStub() {
 // END STRUCT
 
 /** CREATE STATE CHAR ARRAY */
-static void createStateCodeArray(char buf[]) {  
+static void createStateCodeArray(char buf[]) {
   determineCurrentState();
   String state = "{\"state\":";
 
-  if(currentState == StateCode::READY) {
+  if (currentState == StateCode::READY) {
     state.concat(StateCode::READY);
   }
-  else if(currentState == StateCode::LIFT_ASC) {
+  else if (currentState == StateCode::LIFT_ASC) {
     state.concat(StateCode::LIFT_ASC);
   }
-  else if(currentState == StateCode::LIFT_DESC) {
+  else if (currentState == StateCode::LIFT_DESC) {
     state.concat(StateCode::LIFT_DESC);
   }
-  else if(currentState == StateCode::LIFT_STUCK) {
+  else if (currentState == StateCode::LIFT_STUCK) {
     state.concat(StateCode::LIFT_STUCK);
   }
   else {
@@ -188,77 +190,59 @@ static void createStateCodeArray(char buf[]) {
   }
 
   state.concat(',');
-  state.toCharArray(buf, state.length() +1);
+  state.toCharArray(buf, state.length() + 1);
 }
 
-static void createIOTypeStateArray(int typeId, char buf[]) { 
-  char state[100];
+static void createIOTypeStateArray(int typeId, char buf[]) {
+  char state[200];
   createStateCodeArray(state);
   String stateMessage = String(state);
 
   stateMessage.concat("\"iodevices\": {");
   //String stateMessage = "{\"iodevices\": {";
   stateMessage.concat("\"items\":[");
-  
-  for (int i = 0; i < IO_DEVICE_COUNT; i++) {   
-   stateMessage.concat("{\"id\":");
-   stateMessage.concat(devices[i].id);
-   stateMessage.concat(',');
-   stateMessage.concat("\"actionId\":");
-   stateMessage.concat(devices[i].actionId);
-   stateMessage.concat(',');
-   stateMessage.concat("\"typeId\":");
-   stateMessage.concat(devices[i].typeId);
-   stateMessage.concat(',');
-   stateMessage.concat("\"low\":");
-    
-   if(digitalRead(devices[i].pinNr) == LOW) {
-     stateMessage.concat(1);
-     //Serial.println("got low val");
-   }
-   else if(digitalRead(devices[i].pinNr) == HIGH) {
-     stateMessage.concat(0);
-   }
-   if(i == IO_DEVICE_COUNT -1) {
-     stateMessage.concat("}]");
-   }
-   else {
-     stateMessage.concat("},"); 
-   }
-   
+
+  for (int i = 0; i < IO_DEVICE_COUNT; i++) {
+    stateMessage.concat("{\"id\":");
+    stateMessage.concat(devices[i].id);
+    stateMessage.concat(',');
+    stateMessage.concat("\"actionId\":");
+    stateMessage.concat(devices[i].actionId);
+    stateMessage.concat(',');
+    stateMessage.concat("\"typeId\":");
+    stateMessage.concat(devices[i].typeId);
+    stateMessage.concat(',');
+    stateMessage.concat("\"low\":");
+
+    if (digitalRead(devices[i].pinNr) == LOW) {
+      stateMessage.concat(1);
+      //Serial.println("got low val");
+    }
+    else if (digitalRead(devices[i].pinNr) == HIGH) {
+      stateMessage.concat(0);
+    }
+    if (i == IO_DEVICE_COUNT - 1) {
+      stateMessage.concat("}]");
+    }
+    else {
+      stateMessage.concat("},");
+    }
+
   }
 
-  stateMessage.concat("}}");    
-  
+  stateMessage.concat("}}");
+
   int len = stateMessage.length();
   stateMessage.toCharArray(buf, len + 1); // + 1 in case we reached max for null termination
 }
 
 /** SEND NEW STATE WITH UDP */
-// SENSOR DETECTION
-static void sendDetectionSensorStatePacket() {
-  char stateArray[STATE_MSG_SIZE]; // TODO: should replace with global var since it's available anyway.
-  createIOTypeStateArray(IODeviceType::DETECTIONSENSOR, stateArray);
-  
-  http.printHeaders(http.typePlain);  
-  http.println(stateArray);
-  http.sendReply();
-}
-// RELAY
-static void sendRelayStatePacket() {
-  char stateArray[STATE_MSG_SIZE]; // TODO: should replace with global var since it's available anyway.
-  createIOTypeStateArray(IODeviceType::RELAY, stateArray);
-  
-  http.printHeaders(http.typePlain);  
-  http.println(stateArray);
-  http.sendReply();
-}
 // FULL STATE
-static void sendFullStatePayloadPacket() {  
-  char statePayload[STATE_MSG_SIZE]; // TODO: VALIDATE MSG LENGTH!!   
+static void sendFullStatePayloadPacket() {
+  char statePayload[STATE_MSG_SIZE]; // TODO: VALIDATE MSG LENGTH!!
   // 0 for full payload
   createIOTypeStateArray(IODeviceType::RELAY, statePayload);
-  
+
   http.printHeaders(http.typePlain);
   http.println(statePayload);
   http.sendReply();
@@ -280,7 +264,7 @@ void onChangeSensorLiftTop() {
 /** TURN ON/OFF RELAYS */
 // received instruction to send lift UP to position BIN DROP
 void onLiftUpRelay() {
-  if (!digitalRead(relayValveLiftUp) == LOW) {    
+  if (!digitalRead(relayValveLiftUp) == LOW) {
     if (isLiftUpFree()) {
       setState(StateCode::LIFT_ASC);
       digitalWrite(relayValveLiftUp, LOW);
@@ -301,6 +285,60 @@ void onLiftDownRelay() {
   else {
     // set state to ready here??
     digitalWrite(relayValveLiftDown, HIGH);
+  }
+}
+void onBinLoad() {
+  // TODO VERIFY SENSOR CHECK
+  if (!digitalRead(relayValveBinLoad) == LOW) {
+    digitalWrite(relayValveBinLoad, LOW);
+  }
+  else {
+    digitalWrite(relayValveBinLoad, HIGH);
+  }
+}
+
+void onBinDrop() {
+  // TODO VERIFY SENSOR CHECK
+  if (!digitalRead(relayValveBinDrop) == LOW) {
+    digitalWrite(relayValveBinDrop, LOW);
+  }
+  else {
+    digitalWrite(relayValveBinDrop, HIGH);
+  }
+}
+// FEEDERS 1 & 2
+void onValveFeederFwd_1() {
+  if (!digitalRead(relayValveFeederFwd_1) == LOW) {
+    digitalWrite(relayValveFeederFwd_1, LOW);
+  }
+  else {
+    digitalWrite(relayValveFeederFwd_1, HIGH);
+  }
+}
+
+void onValveFeederRev_1() {
+  if (!digitalRead(relayValveFeederRev_1) == LOW) {
+    digitalWrite(relayValveFeederRev_1, LOW);
+  }
+  else {
+    digitalWrite(relayValveFeederRev_1, HIGH);
+  }
+}
+void onValveFeederFwd_2() {
+  if (!digitalRead(relayValveFeederFwd_2) == LOW) {
+    digitalWrite(relayValveFeederFwd_2, LOW);
+  }
+  else {
+    digitalWrite(relayValveFeederFwd_2, HIGH);
+  }
+}
+
+void onValveFeederRev_2() {
+  if (!digitalRead(relayValveFeederRev_2) == LOW) {
+    digitalWrite(relayValveFeederRev_2, LOW);
+  }
+  else {
+    digitalWrite(relayValveFeederRev_2, HIGH);
   }
 }
 
@@ -339,7 +377,7 @@ void setup() {
 }
 
 static void determineCurrentState() {
-  if(isLiftAsc()) {
+  if (isLiftAsc()) {
     setState(StateCode::LIFT_ASC);
   }
   else if (isLiftDesc()) {
@@ -357,19 +395,37 @@ void loop() {
   if (http.isGet(F("/"))) {
     sendFullStatePayloadPacket();
   }
-  else if(http.isGet(F("/relay/lift-up"))) {
+  else if (http.isGet(F("/relay/lift-up"))) {
     onLiftUpRelay();
     sendFullStatePayloadPacket();
   }
-  else if(http.isGet(F("/relay/lift-down"))) {
+  else if (http.isGet(F("/relay/lift-down"))) {
     onLiftDownRelay();
     sendFullStatePayloadPacket();
   }
-  else if (http.isGet(F("/relay-state"))) {
-    sendRelayStatePacket();
+  else if (http.isGet(F("/relay/bin-load"))) {
+    onBinLoad();
+    sendFullStatePayloadPacket();
   }
-  else if (http.isGet(F("/sensor-state"))) {
-    sendDetectionSensorStatePacket();
+  else if (http.isGet(F("/relay/bin-drop"))) {
+    onBinDrop();
+    sendFullStatePayloadPacket();
+  }
+  else if (http.isGet(F("/relay/valv-feeder-fwd-1"))) {
+    onValveFeederFwd_1();
+    sendFullStatePayloadPacket();
+  }
+  else if (http.isGet(F("/relay/valv-feeder-rev-1"))) {
+    onValveFeederRev_1();
+    sendFullStatePayloadPacket();
+  }
+  else if (http.isGet(F("/relay/valv-feeder-fwd-2"))) {
+    onValveFeederFwd_2();
+    sendFullStatePayloadPacket();
+  }
+  else if (http.isGet(F("/relay/valv-feeder-rev-2"))) {
+    onValveFeederRev_2();
+    sendFullStatePayloadPacket();
   }
   else if (http.havePacket()) {
     // Some other HTTP request, return 404
