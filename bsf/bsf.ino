@@ -4,11 +4,11 @@
 #define RELAY_STATE_MSG_SIZE     10
 #define DSENSOR_STATE_MSG_SIZE    4
 #define IO_DEVICE_COUNT          10
-#define STATE_MSG_SIZE         1000
+#define STATE_MSG_SIZE         1200
 
-
+int etherSS = 53;
 /** W5100 Ethernet Interface (optional parameter pin nr. default ok. */
-EtherSia_ENC28J60 ether;
+EtherSia_ENC28J60 ether(etherSS);
 
 /** Define HTTP server */
 HTTPServer http(ether);
@@ -34,8 +34,6 @@ struct IODevice {
 
 /** ARRAYS */
 IODevice devices[10]; // 10 devices for now 8x relay 2x detection sensor !! MISSING WEIGHT SENSORS
-//int relayArray[RELAY_ARRAY_SIZE];
-//int sensorArray[SENSOR_ARRAY_SIZE];
 
 /** RELAY PIN NUMBERS */
 // RELAY pin definitions
@@ -58,30 +56,13 @@ enum StateCode { READY = 0
                };
 enum IODeviceType {WEIGHTSENSOR = 1
 , DETECTIONSENSOR = 2
-, RELAY = 3
-                  };
+, RELAY = 3};
 
 // END GLOBAL VAR
 
 /** BOOL OPERATIONS LIFT DETECTION */
-// Lift at BOTTOM  BIN at LOAD
-bool isLiftUpFree() {
-  if (digitalRead(sensorLiftBottom) == LOW &&
-      digitalRead(sensorLiftTop) == HIGH)
-    return true;
-  else
-    return false;
-}
-// Lift at TOP  BIN at LOAD
-bool isLiftDownFree() {
-  if (digitalRead(sensorLiftBottom) == HIGH &&
-      digitalRead(sensorLiftTop) == LOW)
-    return true;
-  else
-    return false;
-}
 // Lift at TOP and BIN at DROP
-bool isBinAtDrop() {
+static bool isBinAtDrop() {
   if (digitalRead(sensorLiftBottom) == HIGH &&
       digitalRead(sensorLiftTop) == LOW)
     return true;
@@ -89,7 +70,7 @@ bool isBinAtDrop() {
     return false;
 }
 // Lift at LOAD position ready for BELT
-bool isBinAtLoad() {
+static bool isBinAtLoad() {
   if (digitalRead(sensorLiftTop) == HIGH &&
       digitalRead(sensorLiftBottom) == LOW)
     return true;
@@ -97,7 +78,7 @@ bool isBinAtLoad() {
     return false;
 }
 // Lift  between sensors operator action required
-bool isBinDetected() {
+static bool isBinDetected() {
   if (digitalRead(sensorLiftBottom) == HIGH &&
       digitalRead(sensorLiftTop) == HIGH) {
     return false;
@@ -113,13 +94,13 @@ bool isBinDetected() {
     return false;
   }
 }
-bool isLiftAsc() {
+static bool isLiftAsc() {
   if (digitalRead(relayValveLiftUp) == LOW)
     return true;
   else
     return false;
 }
-bool isLiftDesc() {
+static bool isLiftDesc() {
   if (digitalRead(relayValveLiftDown) == LOW)
     return true;
   else
@@ -139,10 +120,10 @@ static void setState(StateCode newState) {
 static void initializeIODeviceStructStub() {
   // ID, ACTION_ID, TYPE_ID, PIN NR
   // values mapped on table io_device
-  devices[0] = {5, 20, 2, sensorLiftBottom};
-  pinMode(sensorLiftBottom, INPUT_PULLUP);
-  devices[1] = {6, 21, 2, sensorLiftTop};
+  devices[1] = {5, 21, 2, sensorLiftTop};
   pinMode(sensorLiftTop, INPUT_PULLUP);
+  devices[0] = {6, 20, 2, sensorLiftBottom};
+  pinMode(sensorLiftBottom, INPUT_PULLUP);  
   devices[2] = {7, 1, 3, relayValveLiftUp};
   devices[3] = {8, 2, 3, relayValveLiftDown};
   devices[4] = {9, 3, 3, relayValveBinLoad};
@@ -193,7 +174,7 @@ static void createStateCodeArray(char buf[]) {
   state.toCharArray(buf, state.length() + 1);
 }
 
-static void createIOTypeStateArray(int typeId, char buf[]) {
+static void createIOTypeStateArray(char buf[]) {
   char state[200];
   createStateCodeArray(state);
   String stateMessage = String(state);
@@ -237,11 +218,17 @@ static void createIOTypeStateArray(int typeId, char buf[]) {
 }
 
 /** SEND NEW STATE WITH UDP */
-// FULL STATE
+static void sendFullStatePayloadUdpPacket() {
+  char stateArray[STATE_MSG_SIZE];
+  createIOTypeStateArray(stateArray);
+  udp.println(stateArray);
+  udp.send();
+}
+// REPLY WITH FULL STATE
 static void sendFullStatePayloadPacket() {
   char statePayload[STATE_MSG_SIZE]; // TODO: VALIDATE MSG LENGTH!!
   // 0 for full payload
-  createIOTypeStateArray(IODeviceType::RELAY, statePayload);
+  createIOTypeStateArray(statePayload);
 
   http.printHeaders(http.typePlain);
   http.println(statePayload);
@@ -253,21 +240,33 @@ static void sendFullStatePayloadPacket() {
 /** SENSOR STATE CHANGE (ATTACHED INTERRUPTS) */
 // ISR CALL, called when sensor BOTTOM flipped
 void onChangeSensorLiftBottom() {
-  Serial.println("sensor btm flipped");
+  Serial.println("sensor btm flipped");  
+  if(isLiftDesc()) {    
+      digitalWrite(relayValveLiftDown, HIGH);
+  }
+  sendFullStatePayloadUdpPacket();
 }
 // ISR CALL, called when sensor TOP flipped
 void onChangeSensorLiftTop() {
-  Serial.println("sensor top flipped");
+  Serial.println("sensor top flipped");  
+  if(isLiftAsc()) {
+    digitalWrite(relayValveLiftUp, HIGH);
+  }
+  sendFullStatePayloadUdpPacket();
 }
+
 // END SENSOR STATE CHANGE
 
 /** TURN ON/OFF RELAYS */
 // received instruction to send lift UP to position BIN DROP
 void onLiftUpRelay() {
   if (!digitalRead(relayValveLiftUp) == LOW) {
-    if (isLiftUpFree()) {
+    if (isBinAtLoad()) {
       setState(StateCode::LIFT_ASC);
       digitalWrite(relayValveLiftUp, LOW);
+    }
+    else {
+      Serial.println("bin is not at load");
     }
   }
   else {
@@ -277,9 +276,12 @@ void onLiftUpRelay() {
 // received instruction to send lift DOWN to LOAD
 void onLiftDownRelay() {
   if (!digitalRead(relayValveLiftDown) == LOW) {
-    if (isLiftDownFree()) {
+    if (isBinAtDrop()) {
       setState(StateCode::LIFT_DESC);
       digitalWrite(relayValveLiftDown, LOW);
+    }
+    else {
+      Serial.println("bin is not at drop");
     }
   }
   else {
@@ -296,7 +298,6 @@ void onBinLoad() {
     digitalWrite(relayValveBinLoad, HIGH);
   }
 }
-
 void onBinDrop() {
   // TODO VERIFY SENSOR CHECK
   if (!digitalRead(relayValveBinDrop) == LOW) {
@@ -315,7 +316,6 @@ void onValveFeederFwd_1() {
     digitalWrite(relayValveFeederFwd_1, HIGH);
   }
 }
-
 void onValveFeederRev_1() {
   if (!digitalRead(relayValveFeederRev_1) == LOW) {
     digitalWrite(relayValveFeederRev_1, LOW);
@@ -332,7 +332,6 @@ void onValveFeederFwd_2() {
     digitalWrite(relayValveFeederFwd_2, HIGH);
   }
 }
-
 void onValveFeederRev_2() {
   if (!digitalRead(relayValveFeederRev_2) == LOW) {
     digitalWrite(relayValveFeederRev_2, LOW);
@@ -342,9 +341,24 @@ void onValveFeederRev_2() {
   }
 }
 
+static void determineCurrentState() {
+  if (isLiftAsc()) {
+    setState(StateCode::LIFT_ASC);
+  }
+  else if (isLiftDesc()) {
+    setState(StateCode::LIFT_DESC);
+  }
+  else {
+    setState(StateCode::READY);
+  }
+  // if timer lift passed it is stuck
+}
+
 /** ARDUINO SETUP AND LOOP METHOD */
 void setup() {
   MACAddress macAddress("70:69:74:2d:30:31");
+  pinMode(etherSS, OUTPUT);
+  digitalWrite(etherSS, HIGH);
 
   // Setup serial port
   Serial.begin(115200);
@@ -376,23 +390,11 @@ void setup() {
   Serial.println("Ready.");
 }
 
-static void determineCurrentState() {
-  if (isLiftAsc()) {
-    setState(StateCode::LIFT_ASC);
-  }
-  else if (isLiftDesc()) {
-    setState(StateCode::LIFT_DESC);
-  }
-  else {
-    setState(StateCode::READY);
-  }
-  // if timer lift passed it is stuck
-}
-
 void loop() {
   ether.receivePacket();
 
   if (http.isGet(F("/"))) {
+    Serial.println("Sending full state on reply.");
     sendFullStatePayloadPacket();
   }
   else if (http.isGet(F("/relay/lift-up"))) {
@@ -439,11 +441,11 @@ void loop() {
   static unsigned long nextMessage = millis();
   if ((long)millis() - startTimeLiftUp > nextMessage) {
     Serial.println("Lift timer passed.\nReset timer and send udp packet");
-    nextMessage = millis() + 10000;
+    nextMessage = millis() + 30000;
     determineCurrentState();
     Serial.println("Sending UDP.");
     char stateArray[STATE_MSG_SIZE];
-    createIOTypeStateArray(0, stateArray);
+    createIOTypeStateArray(stateArray);
     Serial.println(stateArray);
     udp.println(stateArray);
     udp.send();
