@@ -1,21 +1,26 @@
 
 #include <EtherSia.h>
+#include <ArduinoJson.h>
 
 #define RELAY_STATE_MSG_SIZE     10
 #define DSENSOR_STATE_MSG_SIZE    4
 #define IO_DEVICE_COUNT          10
-#define STATE_MSG_SIZE         1200
+#define STATE_MSG_SIZE         600
 
 int etherSS = 53;
+const int arduinoId = 1;
 /** W5100 Ethernet Interface (optional parameter pin nr. default ok. */
 EtherSia_ENC28J60 ether(etherSS);
 
 /** Define HTTP server */
 HTTPServer http(ether);
 
-/** Define UDP socket */
-UDPSocket udp(ether);
+/** Define UDP socket with port to listen on */
+UDPSocket udp(ether, 6677);
 const char * serverIP = "fd54:d174:8676:1:653f:56d7:bd7d:c238";
+
+/** Payload */
+//StaticJsonDocument<600> doc;
 
 /** TIMERS */
 unsigned long startTimeLiftUp, startTimeOperatorNotified;
@@ -46,6 +51,7 @@ int relayValveFeederFwd_2 = 34, relayValveFeederRev_2 = 36;
 int sensorLiftBottom = 20, sensorLiftTop = 21;
 
 /** ENUMS */
+// refine with quadratic probing and add idle statecode
 enum StateCode { READY = 0
 , LIFT_ASC = 1
 , LIFT_DESC = 2
@@ -56,7 +62,8 @@ enum StateCode { READY = 0
                };
 enum IODeviceType {WEIGHTSENSOR = 1
 , DETECTIONSENSOR = 2
-, RELAY = 3};
+, RELAY = 3
+                  };
 
 // END GLOBAL VAR
 
@@ -106,8 +113,8 @@ static bool isLiftDesc() {
   else
     return false;
 }
-//
 // END BOOL OPERATIONS LIFT
+
 /** SET STATE */
 static void setState(StateCode newState) {
   prevState = currentState;
@@ -123,7 +130,7 @@ static void initializeIODeviceStructStub() {
   devices[1] = {5, 21, 2, sensorLiftTop};
   pinMode(sensorLiftTop, INPUT_PULLUP);
   devices[0] = {6, 20, 2, sensorLiftBottom};
-  pinMode(sensorLiftBottom, INPUT_PULLUP);  
+  pinMode(sensorLiftBottom, INPUT_PULLUP);
   devices[2] = {7, 1, 3, relayValveLiftUp};
   devices[3] = {8, 2, 3, relayValveLiftDown};
   devices[4] = {9, 3, 3, relayValveBinLoad};
@@ -149,89 +156,66 @@ static void initializeIODeviceStructStub() {
 }
 // END STRUCT
 
-/** CREATE STATE CHAR ARRAY */
-static void createStateCodeArray(char buf[]) {
+/** SOCKET SEND/REPLY */
+// BROADCAST PAYLOAD
+static void sendFullStatePayloadUdpPacket() {
+  DynamicJsonDocument doc(800);
+  char payload[800];
+
   determineCurrentState();
-  String state = "{\"state\":";
+  doc["arduinoId"].set(arduinoId);
+  //doc["stateReply"].set(currentState);
 
-  if (currentState == StateCode::READY) {
-    state.concat(StateCode::READY);
-  }
-  else if (currentState == StateCode::LIFT_ASC) {
-    state.concat(StateCode::LIFT_ASC);
-  }
-  else if (currentState == StateCode::LIFT_DESC) {
-    state.concat(StateCode::LIFT_DESC);
-  }
-  else if (currentState == StateCode::LIFT_STUCK) {
-    state.concat(StateCode::LIFT_STUCK);
-  }
-  else {
-    Serial.println("no known state");
-  }
-
-  state.concat(',');
-  state.toCharArray(buf, state.length() + 1);
-}
-
-static void createIOTypeStateArray(char buf[]) {
-  char state[200];
-  createStateCodeArray(state);
-  String stateMessage = String(state);
-
-  stateMessage.concat("\"iodevices\": {");
-  //String stateMessage = "{\"iodevices\": {";
-  stateMessage.concat("\"items\":[");
+  JsonObject ioDevices = doc.createNestedObject("iodevices");
+  JsonArray items = ioDevices.createNestedArray("items");
 
   for (int i = 0; i < IO_DEVICE_COUNT; i++) {
-    stateMessage.concat("{\"id\":");
-    stateMessage.concat(devices[i].id);
-    stateMessage.concat(',');
-    stateMessage.concat("\"actionId\":");
-    stateMessage.concat(devices[i].actionId);
-    stateMessage.concat(',');
-    stateMessage.concat("\"typeId\":");
-    stateMessage.concat(devices[i].typeId);
-    stateMessage.concat(',');
-    stateMessage.concat("\"low\":");
-
+    JsonObject obj = items.createNestedObject();
+    obj["id"] = devices[i].id;
+    obj["actionId"] = devices[i].actionId;
+    obj["typeId"] = devices[i].typeId;
     if (digitalRead(devices[i].pinNr) == LOW) {
-      stateMessage.concat(1);
-      //Serial.println("got low val");
+      obj["low"] = 1;
     }
     else if (digitalRead(devices[i].pinNr) == HIGH) {
-      stateMessage.concat(0);
+      obj["low"] = 0;
     }
-    if (i == IO_DEVICE_COUNT - 1) {
-      stateMessage.concat("}]");
-    }
-    else {
-      stateMessage.concat("},");
-    }
-
   }
-
-  stateMessage.concat("}}");
-
-  int len = stateMessage.length();
-  stateMessage.toCharArray(buf, len + 1); // + 1 in case we reached max for null termination
-}
-
-/** SEND NEW STATE WITH UDP */
-static void sendFullStatePayloadUdpPacket() {
-  char stateArray[STATE_MSG_SIZE];
-  createIOTypeStateArray(stateArray);
-  udp.println(stateArray);
+  
+  serializeJson(doc, payload);  
+  udp.println(payload);
   udp.send();
 }
-// REPLY WITH FULL STATE
+// TCP HTTP REPLY
 static void sendFullStatePayloadPacket() {
-  char statePayload[STATE_MSG_SIZE]; // TODO: VALIDATE MSG LENGTH!!
-  // 0 for full payload
-  createIOTypeStateArray(statePayload);
+  DynamicJsonDocument doc(800);
+  char payload[800];
 
-  http.printHeaders(http.typePlain);
-  http.println(statePayload);
+  determineCurrentState();
+  doc["arduinoId"].set(arduinoId);
+  //doc["stateReply"].set(currentState); // somehow this property breakes the size, try other methods for sending payload
+
+  JsonObject ioDevices = doc.createNestedObject("iodevices");
+  JsonArray items = ioDevices.createNestedArray("items");
+
+  for (int i = 0; i < IO_DEVICE_COUNT; i++) {
+    JsonObject obj = items.createNestedObject();
+    obj["id"] = devices[i].id;
+    obj["actionId"] = devices[i].actionId;
+    obj["typeId"] = devices[i].typeId;
+    if (digitalRead(devices[i].pinNr) == LOW) {
+      obj["low"] = 1;
+    }
+    else if (digitalRead(devices[i].pinNr) == HIGH) {
+      obj["low"] = 0;
+    }
+  }
+
+  serializeJson(doc, payload);
+  Serial.println(payload);
+
+  http.printHeaders(http.typeHtml);
+  http.println(payload);
   http.sendReply();
 }
 
@@ -240,16 +224,16 @@ static void sendFullStatePayloadPacket() {
 /** SENSOR STATE CHANGE (ATTACHED INTERRUPTS) */
 // ISR CALL, called when sensor BOTTOM flipped
 void onChangeSensorLiftBottom() {
-  Serial.println("sensor btm flipped");  
-  if(isLiftDesc()) {    
-      digitalWrite(relayValveLiftDown, HIGH);
+  Serial.println("sensor btm flipped");
+  if (isLiftDesc()) {
+    digitalWrite(relayValveLiftDown, HIGH);
   }
   sendFullStatePayloadUdpPacket();
 }
 // ISR CALL, called when sensor TOP flipped
 void onChangeSensorLiftTop() {
-  Serial.println("sensor top flipped");  
-  if(isLiftAsc()) {
+  Serial.println("sensor top flipped");
+  if (isLiftAsc()) {
     digitalWrite(relayValveLiftUp, HIGH);
   }
   sendFullStatePayloadUdpPacket();
@@ -356,13 +340,14 @@ static void determineCurrentState() {
 
 /** ARDUINO SETUP AND LOOP METHOD */
 void setup() {
-  MACAddress macAddress("70:69:74:2d:30:31");
-  pinMode(etherSS, OUTPUT);
-  digitalWrite(etherSS, HIGH);
+  //pinMode(etherSS, OUTPUT);
+  //digitalWrite(etherSS, HIGH);
 
   // Setup serial port
   Serial.begin(115200);
-  Serial.println("[EtherSia MiniHTTPServer]");
+  Serial.println("[BSF Lift and Feeders]");
+
+  MACAddress macAddress("70:69:74:2d:30:31");
   macAddress.println();
 
   // Start Ethernet
@@ -384,9 +369,9 @@ void setup() {
   startTimeLiftUp = millis();
 
   //init arrays
-  setState(StateCode::READY);
-
   initializeIODeviceStructStub();
+
+  setState(StateCode::READY);
   Serial.println("Ready.");
 }
 
@@ -438,19 +423,12 @@ void loop() {
     ether.rejectPacket();
   }
 
-  static unsigned long nextMessage = millis();
-  if ((long)millis() - startTimeLiftUp > nextMessage) {
-    Serial.println("Lift timer passed.\nReset timer and send udp packet");
-    nextMessage = millis() + 30000;
-    determineCurrentState();
-    Serial.println("Sending UDP.");
-    char stateArray[STATE_MSG_SIZE];
-    createIOTypeStateArray(stateArray);
-    Serial.println(stateArray);
-    udp.println(stateArray);
-    udp.send();
-
-  }
+  //    static unsigned long nextMessage = millis();
+  //    if ((long)millis() - startTimeLiftUp > nextMessage) {
+  //      Serial.println("Lift timer passed.\nReset timer and send udp packet");
+  //      nextMessage = millis() + 30000;
+  //      sendFullStatePayloadUdpPacket();
+  //    }
 
   prevState = currentState;
 }
