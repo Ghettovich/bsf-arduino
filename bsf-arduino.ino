@@ -159,45 +159,38 @@ static void initializeIODeviceStructStub() {
 /** SOCKET SEND/REPLY */
 // BROADCAST PAYLOAD
 static void sendFullStatePayloadUdpPacket() {
-  DynamicJsonDocument doc(800);
-  char payload[800];
-
-  determineCurrentState();
-  doc["arduinoId"].set(arduinoId);
-  //doc["stateReply"].set(currentState);
-
+  char payload[ETHERSIA_MAX_PACKET_SIZE];
+  DynamicJsonDocument doc(800);  
   JsonObject ioDevices = doc.createNestedObject("iodevices");
   JsonArray items = ioDevices.createNestedArray("items");
 
-  for (int i = 0; i < IO_DEVICE_COUNT; i++) {
-    JsonObject obj = items.createNestedObject();
-    obj["id"] = devices[i].id;
-    obj["actionId"] = devices[i].actionId;
-    obj["typeId"] = devices[i].typeId;
-    if (digitalRead(devices[i].pinNr) == LOW) {
-      obj["low"] = 1;
-    }
-    else if (digitalRead(devices[i].pinNr) == HIGH) {
-      obj["low"] = 0;
-    }
-  }
-  
+  createFullStateJsonPayload(doc, ioDevices, items);
   serializeJson(doc, payload);  
-  udp.println(payload);
+  
+  udp.print(payload);
   udp.send();
 }
 // TCP HTTP REPLY
 static void sendFullStatePayloadPacket() {
-  DynamicJsonDocument doc(800);
-  char payload[800];
-
-  determineCurrentState();
-  doc["arduinoId"].set(arduinoId);
-  //doc["stateReply"].set(currentState); // somehow this property breakes the size, try other methods for sending payload
-
+  char payload[ETHERSIA_MAX_PACKET_SIZE];
+  DynamicJsonDocument doc(800);  
   JsonObject ioDevices = doc.createNestedObject("iodevices");
   JsonArray items = ioDevices.createNestedArray("items");
 
+  createFullStateJsonPayload(doc, ioDevices, items);
+  serializeJson(doc, payload);
+  Serial.println(payload);
+  
+  http.printHeaders(http.typeJson);
+  http.println(payload);
+  http.sendReply();
+}
+
+static void createFullStateJsonPayload(DynamicJsonDocument doc, JsonObject ioDevices, JsonArray items) {
+  determineCurrentState();
+  doc["arduinoId"] = arduinoId;
+  doc["stateReply"] = currentState; // somehow this property breakes the size, try other methods for sending payload 
+  
   for (int i = 0; i < IO_DEVICE_COUNT; i++) {
     JsonObject obj = items.createNestedObject();
     obj["id"] = devices[i].id;
@@ -209,14 +202,7 @@ static void sendFullStatePayloadPacket() {
     else if (digitalRead(devices[i].pinNr) == HIGH) {
       obj["low"] = 0;
     }
-  }
-
-  serializeJson(doc, payload);
-  Serial.println(payload);
-
-  http.printHeaders(http.typeHtml);
-  http.println(payload);
-  http.sendReply();
+  }    
 }
 
 // END SEND NEW STATE WITH UDP
