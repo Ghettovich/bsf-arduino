@@ -160,37 +160,44 @@ static void initializeIODeviceStructStub() {
 // BROADCAST PAYLOAD
 static void sendFullStatePayloadUdpPacket() {
   char payload[ETHERSIA_MAX_PACKET_SIZE];
-  DynamicJsonDocument doc(800);  
+  StaticJsonDocument<1000> doc;
+  JsonObject info = doc.to<JsonObject>();
   JsonObject ioDevices = doc.createNestedObject("iodevices");
   JsonArray items = ioDevices.createNestedArray("items");
 
-  createFullStateJsonPayload(doc, ioDevices, items);
-  serializeJson(doc, payload);  
-  
+  createFullStateJsonPayload(doc, info, ioDevices, items);
+  serializeJson(doc, payload);
+  Serial.println("printing payload on udp broadcast");
+  Serial.println(payload);
+
   udp.print(payload);
   udp.send();
 }
 // TCP HTTP REPLY
 static void sendFullStatePayloadPacket() {
   char payload[ETHERSIA_MAX_PACKET_SIZE];
-  DynamicJsonDocument doc(800);  
+  StaticJsonDocument<1000> doc;  
+  JsonObject info = doc.to<JsonObject>();
   JsonObject ioDevices = doc.createNestedObject("iodevices");
   JsonArray items = ioDevices.createNestedArray("items");
 
-  createFullStateJsonPayload(doc, ioDevices, items);
+  createFullStateJsonPayload(doc, info, ioDevices, items);
   serializeJson(doc, payload);
+  Serial.println("printing payload on tcp reply");
   Serial.println(payload);
-  
+
   http.printHeaders(http.typeJson);
   http.println(payload);
   http.sendReply();
 }
 
-static void createFullStateJsonPayload(DynamicJsonDocument doc, JsonObject ioDevices, JsonArray items) {
-  determineCurrentState();
-  doc["arduinoId"] = arduinoId;
-  doc["stateReply"] = currentState; // somehow this property breakes the size, try other methods for sending payload 
-  
+static void createFullStateJsonPayload(DynamicJsonDocument doc, JsonObject info, JsonObject ioDevices, JsonArray items) {
+  determineCurrentState();  
+    
+  info["arduinoId"] = arduinoId;
+  ifno["state"] = currentState
+  info["stateReply"] = 0;
+
   for (int i = 0; i < IO_DEVICE_COUNT; i++) {
     JsonObject obj = items.createNestedObject();
     obj["id"] = devices[i].id;
@@ -202,7 +209,7 @@ static void createFullStateJsonPayload(DynamicJsonDocument doc, JsonObject ioDev
     else if (digitalRead(devices[i].pinNr) == HIGH) {
       obj["low"] = 0;
     }
-  }    
+  }
 }
 
 // END SEND NEW STATE WITH UDP
@@ -351,13 +358,13 @@ void setup() {
   Serial.print("Our global address is: ");
   ether.globalAddress().println();
 
-  //Start timer imediately
-  startTimeLiftUp = millis();
-
   //init arrays
   initializeIODeviceStructStub();
 
   setState(StateCode::READY);
+  
+  //Start timer imediately
+  startTimeLiftUp = millis();
   Serial.println("Ready.");
 }
 
@@ -402,19 +409,22 @@ void loop() {
   }
   else if (http.havePacket()) {
     // Some other HTTP request, return 404
+    Serial.println("unrecognized request");
     http.notFound();
   }
-  else {
-    // Some other packet, reply with rejection
-    ether.rejectPacket();
-  }
+//  else {
+//    // Some other packet, reply with rejection
+//    Serial.println("rejected packet");
+//    if(http.payload
+//    ether.rejectPacket();
+//  }
 
-  //    static unsigned long nextMessage = millis();
-  //    if ((long)millis() - startTimeLiftUp > nextMessage) {
-  //      Serial.println("Lift timer passed.\nReset timer and send udp packet");
-  //      nextMessage = millis() + 30000;
-  //      sendFullStatePayloadUdpPacket();
-  //    }
+  static unsigned long nextMessage = millis();
+  if ((long)millis() - startTimeLiftUp > nextMessage) {
+    Serial.println("Lift timer passed.\nReset timer and send udp packet");
+    nextMessage = millis() + 30000;
+    sendFullStatePayloadUdpPacket();
+  }
 
   prevState = currentState;
 }
