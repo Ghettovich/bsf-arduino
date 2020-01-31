@@ -17,10 +17,7 @@ HTTPServer http(ether);
 
 /** Define UDP socket with port to listen on */
 UDPSocket udp(ether, 6677);
-const char * serverIP = "fd54:d174:8676:1:653f:56d7:bd7d:c238";
-
-/** Payload */
-//StaticJsonDocument<600> doc;
+const char * serverIP = "fd54:d174:8676:1:c4cf:5953:ac2c:8924";
 
 /** TIMERS */
 unsigned long startTimeLiftUp, startTimeOperatorNotified;
@@ -195,7 +192,7 @@ static void createFullStateJsonPayload(DynamicJsonDocument doc, JsonObject info,
   determineCurrentState();  
     
   info["arduinoId"] = arduinoId;
-  ifno["state"] = currentState
+  info["state"] = currentState;
   info["stateReply"] = 0;
 
   for (int i = 0; i < IO_DEVICE_COUNT; i++) {
@@ -412,12 +409,10 @@ void loop() {
     Serial.println("unrecognized request");
     http.notFound();
   }
-//  else {
-//    // Some other packet, reply with rejection
-//    Serial.println("rejected packet");
-//    if(http.payload
-//    ether.rejectPacket();
-//  }
+  else {
+    // Some other packet, reply with rejection
+    ether.rejectPacket();
+  }
 
   static unsigned long nextMessage = millis();
   if ((long)millis() - startTimeLiftUp > nextMessage) {
