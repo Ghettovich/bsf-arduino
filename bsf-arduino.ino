@@ -1,15 +1,12 @@
-
 #include <EtherSia.h>
 #include <ArduinoJson.h>
 
-#define RELAY_STATE_MSG_SIZE     10
-#define DSENSOR_STATE_MSG_SIZE    4
-#define IO_DEVICE_COUNT          10
-#define STATE_MSG_SIZE         600
+#define IO_DEVICE_COUNT   10
 
 int etherSS = 53;
 const int arduinoId = 1;
-/** W5100 Ethernet Interface (optional parameter pin nr. default ok. */
+const int weightDeviceTypeId = 1, detectionSensorTypeId = 2, relayTypeId = 3;
+/** ENC28J60 Ethernet Interface */
 EtherSia_ENC28J60 ether(etherSS);
 
 /** Define HTTP server */
@@ -17,7 +14,7 @@ HTTPServer http(ether);
 
 /** Define UDP socket with port to listen on */
 UDPSocket udp(ether, 6677);
-const char * serverIP = "fd54:d174:8676:1:c4cf:5953:ac2c:8924";
+const char * serverIP = "fe80::3d15:b791:18be:a308";
 
 /** TIMERS */
 unsigned long startTimeLiftUp, startTimeOperatorNotified;
@@ -25,6 +22,7 @@ long maxTimeLiftNotDetected = 3000; // 3 seconds
 
 /** STATE TRANSITIONS */
 int currentState = 0, prevState = 0;
+
 
 /** STRUCTS */
 struct IODevice {
@@ -50,19 +48,14 @@ int sensorLiftBottom = 20, sensorLiftTop = 21;
 /** ENUMS */
 // refine with quadratic probing and add idle statecode
 enum StateCode { READY = 0
-, LIFT_ASC = 1
-, LIFT_DESC = 2
-, BIN_LOADING = 3
-, BIN_DUMPING = 4
-, LIFT_STUCK = 90
-, BIN_STUCK = 91
+, LIFT_ASC
+, LIFT_DESC
+, BIN_LOADING
+, BIN_DUMPING
+, LIFT_STUCK
+, BIN_STUCK
                };
-enum IODeviceType {WEIGHTSENSOR = 1
-, DETECTIONSENSOR = 2
-, RELAY = 3
-                  };
-
-// END GLOBAL VAR
+// END GLOBAL VARHipHop-Rap
 
 /** BOOL OPERATIONS LIFT DETECTION */
 // Lift at TOP and BIN at DROP
@@ -124,32 +117,40 @@ static void setState(StateCode newState) {
 static void initializeIODeviceStructStub() {
   // ID, ACTION_ID, TYPE_ID, PIN NR
   // values mapped on table io_device
-  devices[1] = {5, 21, 2, sensorLiftTop};
+  devices[1] = {5, 21, detectionSensorTypeId, sensorLiftTop};
   pinMode(sensorLiftTop, INPUT_PULLUP);
-  devices[0] = {6, 20, 2, sensorLiftBottom};
+  devices[0] = {6, 20, detectionSensorTypeId, sensorLiftBottom};
   pinMode(sensorLiftBottom, INPUT_PULLUP);
-  devices[2] = {7, 1, 3, relayValveLiftUp};
-  devices[3] = {8, 2, 3, relayValveLiftDown};
-  devices[4] = {9, 3, 3, relayValveBinLoad};
-  devices[5] = {10, 4, 3, relayValveBinDrop};
-  devices[6] = {11, 5, 3, relayValveFeederFwd_1};
-  devices[7] = {12, 6, 3, relayValveFeederRev_1};
-  devices[8] = {13, 7, 3, relayValveFeederFwd_2};
-  devices[9] = {14, 8, 3, relayValveFeederRev_2};
 
   // ATTACH INTERRUPT EVENTS
   attachInterrupt(digitalPinToInterrupt(sensorLiftBottom), onChangeSensorLiftBottom, CHANGE);
   attachInterrupt(digitalPinToInterrupt(sensorLiftTop), onChangeSensorLiftTop, CHANGE);
 
-  // DEFINE AS OUTPUT AND SET ALL RELAYS HIGH
-  for (auto device : devices) {
-    if (device.typeId == IODeviceType::RELAY) {
-      pinMode(device.pinNr, OUTPUT);
-      if (!digitalRead(device.pinNr) == HIGH) {
-        digitalWrite(device.pinNr, HIGH);
-      }
-    }
-  }
+  // DEFINE RELAY
+  devices[2] = {7, 1, relayTypeId, relayValveLiftUp};
+  pinMode(relayValveLiftUp, OUTPUT);
+  digitalWrite(relayValveLiftUp, HIGH);
+  devices[3] = {8, 2, relayTypeId, relayValveLiftDown};
+  pinMode(relayValveLiftDown, OUTPUT);
+  digitalWrite(relayValveLiftDown, HIGH);
+  devices[4] = {9, 3, relayTypeId, relayValveBinLoad};
+  pinMode(relayValveBinLoad, OUTPUT);
+  digitalWrite(relayValveBinLoad, HIGH);
+  devices[5] = {10, 4, relayTypeId, relayValveBinDrop};
+  pinMode(relayValveBinDrop, OUTPUT);
+  digitalWrite(relayValveBinDrop, HIGH);
+  devices[6] = {11, 5, relayTypeId, relayValveFeederFwd_1};
+  pinMode(relayValveFeederFwd_1, OUTPUT);
+  digitalWrite(relayValveFeederFwd_1, HIGH);
+  devices[7] = {12, 6, relayTypeId, relayValveFeederRev_1};
+  pinMode(relayValveFeederRev_1, OUTPUT);
+  digitalWrite(relayValveFeederRev_1, HIGH);
+  devices[8] = {13, 7, relayTypeId, relayValveFeederFwd_2};
+  pinMode(relayValveFeederFwd_2, OUTPUT);
+  digitalWrite(relayValveFeederFwd_2, HIGH);
+  devices[9] = {14, 8, relayTypeId, relayValveFeederRev_2};
+  pinMode(relayValveFeederRev_2, OUTPUT);
+  digitalWrite(relayValveFeederRev_2, HIGH);
 }
 // END STRUCT
 
@@ -173,7 +174,7 @@ static void sendFullStatePayloadUdpPacket() {
 // TCP HTTP REPLY
 static void sendFullStatePayloadPacket() {
   char payload[ETHERSIA_MAX_PACKET_SIZE];
-  StaticJsonDocument<1000> doc;  
+  StaticJsonDocument<1000> doc;
   JsonObject info = doc.to<JsonObject>();
   JsonObject ioDevices = doc.createNestedObject("iodevices");
   JsonArray items = ioDevices.createNestedArray("items");
@@ -189,11 +190,10 @@ static void sendFullStatePayloadPacket() {
 }
 
 static void createFullStateJsonPayload(DynamicJsonDocument doc, JsonObject info, JsonObject ioDevices, JsonArray items) {
-  determineCurrentState();  
-    
+  determineCurrentState();
+
   info["arduinoId"] = arduinoId;
   info["state"] = currentState;
-  info["stateReply"] = 0;
 
   for (int i = 0; i < IO_DEVICE_COUNT; i++) {
     JsonObject obj = items.createNestedObject();
@@ -239,9 +239,6 @@ void onLiftUpRelay() {
       setState(StateCode::LIFT_ASC);
       digitalWrite(relayValveLiftUp, LOW);
     }
-    else {
-      Serial.println("bin is not at load");
-    }
   }
   else {
     digitalWrite(relayValveLiftUp, HIGH);
@@ -254,12 +251,8 @@ void onLiftDownRelay() {
       setState(StateCode::LIFT_DESC);
       digitalWrite(relayValveLiftDown, LOW);
     }
-    else {
-      Serial.println("bin is not at drop");
-    }
   }
   else {
-    // set state to ready here??
     digitalWrite(relayValveLiftDown, HIGH);
   }
 }
@@ -330,14 +323,10 @@ static void determineCurrentState() {
 
 /** ARDUINO SETUP AND LOOP METHOD */
 void setup() {
-  //pinMode(etherSS, OUTPUT);
-  //digitalWrite(etherSS, HIGH);
+  MACAddress macAddress("70:69:74:2d:30:31");
 
-  // Setup serial port
   Serial.begin(115200);
   Serial.println("[BSF Lift and Feeders]");
-
-  MACAddress macAddress("70:69:74:2d:30:31");
   macAddress.println();
 
   // Start Ethernet
@@ -345,23 +334,22 @@ void setup() {
     Serial.println("Failed to configure Ethernet");
   }
 
-  if (udp.setRemoteAddress(serverIP, 6677)) {
-    Serial.print("Remote address: ");
-    udp.remoteAddress().println();
-  }
-
   Serial.print("Our link-local address is: ");
   ether.linkLocalAddress().println();
   Serial.print("Our global address is: ");
   ether.globalAddress().println();
 
+  if (udp.setRemoteAddress(serverIP, 6677)) {
+    Serial.print("Remote address: ");
+    udp.remoteAddress().println();
+  }
+
   //init arrays
   initializeIODeviceStructStub();
-
   setState(StateCode::READY);
-  
-  //Start timer imediately
-  startTimeLiftUp = millis();
+  //
+  //  //Start timer imediately
+  //  startTimeLiftUp = millis();
   Serial.println("Ready.");
 }
 
@@ -369,6 +357,9 @@ void loop() {
   ether.receivePacket();
 
   if (http.isGet(F("/"))) {
+    //    http.printHeaders(http.typeHtml);
+    //    http.println(F("<h1>Hello World</h1>"));
+    //    http.sendReply();
     Serial.println("Sending full state on reply.");
     sendFullStatePayloadPacket();
   }
@@ -414,12 +405,12 @@ void loop() {
     ether.rejectPacket();
   }
 
-  static unsigned long nextMessage = millis();
-  if ((long)millis() - startTimeLiftUp > nextMessage) {
-    Serial.println("Lift timer passed.\nReset timer and send udp packet");
-    nextMessage = millis() + 30000;
-    sendFullStatePayloadUdpPacket();
-  }
+  //  static unsigned long nextMessage = millis();
+  //  if ((long)millis() - startTimeLiftUp > nextMessage) {
+  //    Serial.println("Lift timer passed.\nReset timer and send udp packet");
+  //    nextMessage = millis() + 30000;
+  //    sendFullStatePayloadUdpPacket();
+  //  }
 
   prevState = currentState;
 }
