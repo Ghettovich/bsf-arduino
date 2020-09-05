@@ -42,7 +42,7 @@ void setup() {
     Serial.begin(115200);
     Serial.println("[BSF Lift and Feeders]");
 
-    createRelayStub();
+    setupRelayArray();
     setupDetectionSensors();
     setupECN28J60Adapter();
 

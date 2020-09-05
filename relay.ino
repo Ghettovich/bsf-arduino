@@ -1,7 +1,7 @@
 #include "src/IODevice.h"
 #include <ArduinoJson.h>
 
-const int relayBlockSize = 8;
+const int relayBlockSize = 8, relayTypeId = 3;
 IODevice relayArray[relayBlockSize];
 
 const int relayLiftUp = 30, relayLiftDown = 31,
@@ -9,8 +9,12 @@ const int relayLiftUp = 30, relayLiftDown = 31,
         relayFeederFWD_1 = 34, relayFeederREV_1 = 35,
         relayFeederFWD_2 = 36, relayFeederREV_2 = 37;
 
-int getRelayBlockSize() {
-    return relayBlockSize;
+int getMinRelayId() {
+  return relayLiftUp;
+}
+
+int getMaxRelayId() {
+  return relayFeederREV_2;
 }
 
 void createRelayStub() {
@@ -40,8 +44,7 @@ void setupRelayArray() {
     createRelayStub();
 }
 
-void addRelayArrayToJsonArray(JsonArray items) {
-    const int relayTypeId = 3;
+void addRelayArrayToJsonArray(JsonArray items) {    
 
     for (byte i = 0; i < relayBlockSize; i++) {
         JsonObject obj = items.createNestedObject();
@@ -67,7 +70,8 @@ void flipRelay(int relayId) {
 }
 
 void toggleRelay(int relayId) {
-
+    Serial.print("relay id = ");
+    Serial.println(relayId);
     switch (relayId) {
         case relayLiftUp :
             onLiftUpRelay();
@@ -94,7 +98,7 @@ void toggleRelay(int relayId) {
             onValveFeederRev_2();
             break;
         default:
-            printMessage("unkown id for relay");
+            Serial.println("unkown id for relay");
             break;
     }
 }
