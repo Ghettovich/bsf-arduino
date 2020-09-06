@@ -1,4 +1,3 @@
-//#include <EtherSia.h>
 #include <ArduinoJson.h>
 #include "src/IODevice.h"
 
@@ -55,7 +54,8 @@ void setup() {
 
 void loop() {
     // Listen for incoming packets
-    receiveEthernetPacket();
+    sensorLoop();
+    receiveEthernetPacketLoop();
 
     prevState = currentState;
 }

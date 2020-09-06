@@ -38,40 +38,6 @@ void setupECN28J60Adapter() {
   ether.globalAddress().println();
 }
 
-void receiveEthernetPacket() {
-  ether.receivePacket();
-
-  if (http.isGet(F("/"))) {
-    //    http.printHeaders(http.typeHtml);
-    //    http.println(F("<h1>Hello World</h1>"));
-    //    http.sendReply();
-    Serial.println("Sending full state on reply.");
-    sendFullStatePayloadPacket();
-  }
-  // 1-99 relay range
-  else if (http.isGet(F("/relay/?")) || http.isGet(F("/relay/??"))) {
-    int num = pathToNum();
-    toggleRelay(num);
-
-    sendFullStatePayloadPacket();
-  }
-  else if (http.havePacket()) {
-    // Some other HTTP request, return 404
-    Serial.println("unrecognized request");
-    http.notFound();
-  }
-  else {
-    // Some other packet, reply with rejection
-    ether.rejectPacket();
-  }
-  //  static unsigned long nextMessage = millis();
-  //  if ((long)millis() - startTimeLiftUp > nextMessage) {
-  //    Serial.println("Lift timer passed.\nReset timer and send udp packet");
-  //    nextMessage = millis() + 30000;
-  //    sendFullStatePayloadUdpPacket();
-  //  }
-}
-
 /** SOCKET SEND/REPLY */
 // BROADCAST PAYLOAD
 void sendFullStatePayloadUdpPacket() {
@@ -140,10 +106,7 @@ int pathToNum() {
   }
 
   relay_id[count] = '\0';
-
-  if (count > 0) {
-    sscanf(relay_id, "%d",  &id);
-  }
+  sscanf(relay_id, "%d",  &id);
 
   // relay block size is currently 8 and start at id 30 check and test method again when second relay block added
   if (id >= getMinRelayId() && id <= getMaxRelayId()) {
@@ -152,4 +115,38 @@ int pathToNum() {
     http.notFound();
     return -1;
   }
+}
+
+/**
+   Listen for incoming ethernet packets
+*/
+void receiveEthernetPacketLoop() {
+  ether.receivePacket();
+
+  if (http.isGet(F("/"))) {
+    Serial.println("Sending full state on reply.");
+    sendFullStatePayloadPacket();
+  }
+  // 1-99 relay range
+  else if (http.isGet(F("/relay/?")) || http.isGet(F("/relay/??"))) {
+    int num = pathToNum();
+    toggleRelay(num);
+
+    sendFullStatePayloadPacket();
+  }
+  else if (http.havePacket()) {
+    // Some other HTTP request, return 404
+    Serial.println("unrecognized request");
+    http.notFound();
+  }
+  else {
+    // Some other packet, reply with rejection
+    ether.rejectPacket();
+  }
+  //  static unsigned long nextMessage = millis();
+  //  if ((long)millis() - startTimeLiftUp > nextMessage) {
+  //    Serial.println("Lift timer passed.\nReset timer and send udp packet");
+  //    nextMessage = millis() + 30000;
+  //    sendFullStatePayloadUdpPacket();
+  //  }
 }
