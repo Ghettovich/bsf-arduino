@@ -9,8 +9,8 @@ EtherSia_ENC28J60 ether(etherSS);
 HTTPServer http(ether);
 
 /** Define UDP socket with port to listen on */
-UDPSocket udp(ether, port);
-const char * serverIP = "fd54:d174:8676:1:e076:66fd:7be6:2d36";
+UDPSocket udp(ether);
+const char * serverIP = "2a02:a213:9f81:4e80:2aab:51a2:d551:1c33";
 
 /**
    Initialize ethernet adapter
@@ -52,7 +52,7 @@ void sendFullStatePayloadUdpPacket() {
   Serial.println("printing payload on udp broadcast");
   Serial.println(payload);
 
-  udp.print(payload);
+  udp.println(payload);
   udp.send();
 }
 // TCP HTTP REPLY
