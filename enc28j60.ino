@@ -47,10 +47,12 @@ void sendFullStatePayloadUdpPacket() {
   JsonObject ioDevices = doc.createNestedObject("iodevices");
   JsonArray items = ioDevices.createNestedArray("items");
 
-  createFullStateJsonPayload(doc, info, ioDevices, items);
+  createFullStateJsonPayload(info, items);
   serializeJson(doc, payload);
   Serial.println("printing payload on udp broadcast");
   Serial.println(payload);
+
+  // ToDo add check if remoteAddress is found (see weightstation sketch)
 
   udp.println(payload);
   udp.send();
@@ -63,7 +65,7 @@ void sendFullStatePayloadPacket() {
   JsonObject ioDevices = doc.createNestedObject("iodevices");
   JsonArray items = ioDevices.createNestedArray("items");
 
-  createFullStateJsonPayload(doc, info, ioDevices, items);
+  createFullStateJsonPayload(info, items);
   serializeJson(doc, payload);
   Serial.println("printing payload on tcp reply");
   Serial.println(payload);
@@ -73,7 +75,8 @@ void sendFullStatePayloadPacket() {
   http.sendReply();
 }
 
-void createFullStateJsonPayload(DynamicJsonDocument doc, JsonObject info, JsonObject ioDevices, JsonArray items) {
+// ToDO: REMOVE IO DEVICES PARAMATER, SAME FOR DOC (UNUSED!)
+void createFullStateJsonPayload(JsonObject info, JsonArray items) {
   //determineCurrentState();
 
   info["arduinoId"] = arduinoId;
