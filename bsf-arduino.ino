@@ -38,7 +38,7 @@ static void determineCurrentState() {
 
 /** ARDUINO SETUP AND LOOP METHOD */
 void setup() {
-    Serial.begin(115200);
+    Serial.begin(57600);
     Serial.println("[BSF Lift and Feeders]");
 
     setupRelayArray();
