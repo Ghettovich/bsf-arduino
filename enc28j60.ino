@@ -22,10 +22,18 @@ void setupECN28J60Adapter() {
   MACAddress macAddress("70:69:74:2d:30:31");
   macAddress.println();
 
+  //ether.disableAutoconfiguration();
+
   // Start Ethernet
   if (ether.begin(macAddress) == false) {
     Serial.println("Failed to configure Ethernet");
   }
+
+  // Configure a static global address and router addresses
+//  ether.setGlobalAddress("2001:1234::5000");
+//  if (ether.setRouter("fe80::4a8f:5aff:fe60:b7fe") == false) {
+//    Serial.println("Failed to configure router address");
+//  }
 
   if (udp.setRemoteAddress(serverIP, port)) {
     Serial.print("Remote address: ");
