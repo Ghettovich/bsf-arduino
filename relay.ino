@@ -9,13 +9,6 @@ const int relayLiftUp = 30, relayLiftDown = 31,
           relayFeederFWD_1 = 34, relayFeederREV_1 = 35,
           relayFeederFWD_2 = 36, relayFeederREV_2 = 37;
 
-int getMinRelayId() {
-  return relayLiftUp;
-}
-
-int getMaxRelayId() {
-  return relayFeederREV_2;
-}
 
 void createRelayStub() {
   int pinNrStart = 22;

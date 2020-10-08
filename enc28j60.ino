@@ -1,86 +1,186 @@
 #include "src/IODevice.h"
-#include <EtherSia.h>
+#include "src/ReplyEnum.h"
 #include <ArduinoJson.h>
 
-/** ENC28J60 Ethernet Interface */
-const int etherSS = 53, port = 6677;
-EtherSia_ENC28J60 ether(etherSS);
-/** Define HTTP server */
-HTTPServer http(ether);
+const int serverPort = 5001;
+const int maxPayloadSize = 1500;
+char jsonPayload[maxPayloadSize];
 
-/** Define UDP socket with port to listen on */
-UDPSocket udp(ether);
-const char * serverIP = "2a02:a213:9f81:4e80:2aab:51a2:d551:1c33";
+ReplyWithCode replyCode;
+
+// Enter a MAC address and IP address for your controller below.
+// The IP address will be dependent on your local network:
+byte mac[] = {
+  0xE8, 0xD4, 0x43, 0x00, 0xA8, 0x3A
+};
+
+IPAddress ip(192, 168, 178, 21);
+byte serverIP[] = {192, 168, 178, 242};
+
+// Initialize the Ethernet server library
+// with the IP address and port you want to use
+// (port 80 is default for HTTP):
+EthernetServer server(serverPort);
+EthernetClient client;
 
 /**
    Initialize ethernet adapter
  * */
 void setupECN28J60Adapter() {
-  pinMode(etherSS, OUTPUT);
-  digitalWrite(etherSS, HIGH);
-
-  MACAddress macAddress("70:69:74:2d:30:31");
-  macAddress.println();
-
-  //ether.disableAutoconfiguration();
-
-  // Start Ethernet
-  if (ether.begin(macAddress) == false) {
-    Serial.println("Failed to configure Ethernet");
+  // Open serial communications and wait for port to open:
+  Serial.begin(57600);
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
   }
 
-  // Configure a static global address and router addresses
-//  ether.setGlobalAddress("2001:1234::5000");
-//  if (ether.setRouter("fe80::4a8f:5aff:fe60:b7fe") == false) {
-//    Serial.println("Failed to configure router address");
-//  }
+  Serial.println("[BSF Arduino Bin & Lift]");
 
-  if (udp.setRemoteAddress(serverIP, port)) {
-    Serial.print("Remote address: ");
-    udp.remoteAddress().println();
+  // start the Ethernet connection and the server:
+  Ethernet.begin(mac, ip);
+
+  // Check for Ethernet hardware present
+  if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+    Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
+    while (true) {
+      delay(1); // do nothing, no point running without Ethernet hardware
+    }
   }
 
-  Serial.print("Our link-local address is: ");
-  ether.linkLocalAddress().println();
-  Serial.print("Our global address is: ");
-  ether.globalAddress().println();
+  // start the server
+  server.begin();
+  Serial.print("server is at ");
+  Serial.println(Ethernet.localIP());
+}
+
+
+/**
+   Listen for incoming ethernet packets
+*/
+void receiveEthernetPacketLoop() {
+  // listen for incoming clients
+  client = server.available();
+  if (client) {
+    Serial.println("new client");
+    // an http request ends with a blank line
+    boolean currentLineIsBlank = true;
+    while (client.connected()) {
+      if (client.available()) {
+
+        int index = 0;
+
+        // Here is where the payload data is.
+        while (client.available())
+        {
+          jsonPayload[index] = client.read();
+          index++;
+        }
+
+        deserializeJsonPayload();
+        sendReply();
+        break;
+      }
+
+    }
+    // give the web browser time to receive the data
+    delay(1);
+    // close the connection:
+    client.stop();
+    Serial.println("client disconnected");
+
+  }
+}
+
+void sendReply() {
+
+  switch (replyCode) {
+    case FULL_STATE_RPLY:
+      sendFullStatePayloadPacket();
+      break;
+    default:
+      sendFullStatePayloadPacket();
+      break;
+  }
+}
+
+
+/**
+   Deserialize the JSON document
+*/
+void deserializeJsonPayload() {
+  Serial.println("copying payload...");
+  StaticJsonDocument <maxPayloadSize> doc;
+  DeserializationError error = deserializeJson(doc, jsonPayload);
+
+  // Test if parsing succeeds.
+  if (error) {
+    Serial.print(F("deserializeJson() failed: "));
+    Serial.println(error.c_str());
+    return;
+  } else {
+    int replyCodeJson = doc["replyCode"];
+    Serial.print("Reply state code = ");
+    Serial.println(replyCodeJson);
+
+    if (replyCodeJson) {
+      replyCode = identifyReplyCode(replyCodeJson);
+    }
+
+    int toggleRelayId = doc["toggleRelayId"];
+    Serial.print("Relay to toggle = ");
+    Serial.println(toggleRelayId);
+
+    if (toggleRelayId) {
+      toggleRelay(toggleRelayId);
+    }
+
+  }
+
 }
 
 /** SOCKET SEND/REPLY */
 // BROADCAST PAYLOAD
-void sendFullStatePayloadUdpPacket() {
-  char payload[ETHERSIA_MAX_PACKET_SIZE];
-  StaticJsonDocument<ETHERSIA_MAX_PACKET_SIZE> doc;
+void sendNewStateToServer() {
+
+  char payload[maxPayloadSize];
+  StaticJsonDocument<maxPayloadSize> doc;
   JsonObject info = doc.to<JsonObject>();
   JsonObject ioDevices = doc.createNestedObject("iodevices");
   JsonArray items = ioDevices.createNestedArray("items");
 
   createFullStateJsonPayload(info, items);
   serializeJson(doc, payload);
-  Serial.println("printing payload on udp broadcast");
-  Serial.println(payload);
 
-  // ToDo add check if remoteAddress is found (see weightstation sketch)
 
-  udp.println(payload);
-  udp.send();
+  // if you get a connection, report back via serial:
+  if (client.connect(serverIP, serverPort)) {
+    Serial.print("connected to ");
+    Serial.println(client.remoteIP());
+    // Make a HTTP request:
+    client.println("REEEE");
+    client.println();
+
+    client.stop();
+
+  } else {
+    // if you didn't get a connection to the server:
+    Serial.println("connection failed");
+  }
+
 }
 // TCP HTTP REPLY
 void sendFullStatePayloadPacket() {
-  char payload[ETHERSIA_MAX_PACKET_SIZE];
-  StaticJsonDocument<ETHERSIA_MAX_PACKET_SIZE> doc;
+  char payload[maxPayloadSize];
+  StaticJsonDocument<maxPayloadSize> doc;
   JsonObject info = doc.to<JsonObject>();
   JsonObject ioDevices = doc.createNestedObject("iodevices");
   JsonArray items = ioDevices.createNestedArray("items");
 
   createFullStateJsonPayload(info, items);
   serializeJson(doc, payload);
-  Serial.println("printing payload on tcp reply");
-  Serial.println(payload);
+  //  Serial.println("printing payload on tcp reply");
+  //  Serial.println(payload);
 
-  http.printHeaders(http.typeJson);
-  http.println(payload);
-  http.sendReply();
+  client.println(payload);
 }
 
 // ToDO: REMOVE IO DEVICES PARAMATER, SAME FOR DOC (UNUSED!)
@@ -93,71 +193,4 @@ void createFullStateJsonPayload(JsonObject info, JsonArray items) {
   addRelayArrayToJsonArray(items);
   addBinDropToJsonArray(items);
   addBinLoadToJsonArray(items);
-}
-
-/**
-   Get the output number from the path of the HTTP request
-
-   @return the output number between 1-99, or -1 if it isn't valid
-*/
-int pathToNum() {
-  int id;
-  char relay_id[3];
-  int count = 0;
-
-  String path = http.path();
-  Serial.println(path);
-
-  for (int i = 7; i < path.length(); i++) {
-    char c = path.charAt(i);
-    if (isDigit(c)) {
-      relay_id[count] = c;
-      count++;
-    }
-  }
-
-  relay_id[count] = '\0';
-  sscanf(relay_id, "%d",  &id);
-
-  // relay block size is currently 8 and start at id 30 check and test method again when second relay block added
-  if (id >= getMinRelayId() && id <= getMaxRelayId()) {
-    return id;
-  } else {
-    http.notFound();
-    return -1;
-  }
-}
-
-/**
-   Listen for incoming ethernet packets
-*/
-void receiveEthernetPacketLoop() {
-  ether.receivePacket();
-
-  if (http.isGet(F("/"))) {
-    Serial.println("Sending full state on reply.");
-    sendFullStatePayloadPacket();
-  }
-  // 1-99 relay range
-  else if (http.isGet(F("/relay/?")) || http.isGet(F("/relay/??"))) {
-    int num = pathToNum();
-    toggleRelay(num);
-
-    sendFullStatePayloadPacket();
-  }
-  else if (http.havePacket()) {
-    // Some other HTTP request, return 404
-    Serial.println("unrecognized request");
-    http.notFound();
-  }
-  else {
-    // Some other packet, reply with rejection
-    ether.rejectPacket();
-  }
-  //  static unsigned long nextMessage = millis();
-  //  if ((long)millis() - startTimeLiftUp > nextMessage) {
-  //    Serial.println("Lift timer passed.\nReset timer and send udp packet");
-  //    nextMessage = millis() + 30000;
-  //    sendFullStatePayloadUdpPacket();
-  //  }
 }
