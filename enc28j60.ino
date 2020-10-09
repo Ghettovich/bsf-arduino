@@ -29,10 +29,6 @@ EthernetClient client;
 void setupECN28J60Adapter() {
   // Open serial communications and wait for port to open:
   Serial.begin(57600);
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
-  }
-
   Serial.println("[BSF Arduino Bin & Lift]");
 
   // start the Ethernet connection and the server:
@@ -65,19 +61,23 @@ void receiveEthernetPacketLoop() {
     boolean currentLineIsBlank = true;
     while (client.connected()) {
       if (client.available()) {
-
         int index = 0;
+        char c = client.read();
 
-        // Here is where the payload data is.
-        while (client.available())
-        {
-          jsonPayload[index] = client.read();
-          index++;
+        if (c == '{') {
+
+          // Here is where the payload data is.
+          while (client.available())
+          {
+            jsonPayload[index] = c;
+            c = client.read();
+            index++;
+          }
+
+          deserializeJsonPayload();
+          sendReply();
+          break;
         }
-
-        deserializeJsonPayload();
-        sendReply();
-        break;
       }
 
     }
@@ -140,7 +140,6 @@ void deserializeJsonPayload() {
 /** SOCKET SEND/REPLY */
 // BROADCAST PAYLOAD
 void sendNewStateToServer() {
-
   char payload[maxPayloadSize];
   StaticJsonDocument<maxPayloadSize> doc;
   JsonObject info = doc.to<JsonObject>();
@@ -155,10 +154,9 @@ void sendNewStateToServer() {
   if (client.connect(serverIP, serverPort)) {
     Serial.print("connected to ");
     Serial.println(client.remoteIP());
-    // Make a HTTP request:
-    client.println("REEEE");
+    // Write to host socket
+    client.println(payload);
     client.println();
-
     client.stop();
 
   } else {
