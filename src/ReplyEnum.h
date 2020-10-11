@@ -1,7 +1,7 @@
 #ifndef BSF_ARDUINO_REPLYENUM_H
 #define BSF_ARDUINO_REPLYENUM_H
 
-enum ReplyWithCode { FULL_STATE_RPLY, RELAY_STATE_RPLY, DETECTION_STATE_RPLY };
+enum ReplyWithCode { FULL_STATE_RPLY, RELAY_STATE_RPLY, DETECTION_STATE_RPLY, EMPTY };
 
 enum ReplyWithCode identifyReplyCode(int replyStateCode);
 
@@ -14,6 +14,8 @@ enum ReplyWithCode identifyReplyCode(int replyStateCode) {
             return RELAY_STATE_RPLY;
         case DETECTION_STATE_RPLY:
             return DETECTION_STATE_RPLY;
+        case EMPTY:
+            return EMPTY;
         default:
             return FULL_STATE_RPLY;
 

@@ -118,16 +118,12 @@ void deserializeJsonPayload() {
     return;
   } else {
     int replyCodeJson = doc["replyCode"];
-    Serial.print("Reply state code = ");
-    Serial.println(replyCodeJson);
 
     if (replyCodeJson) {
       replyCode = identifyReplyCode(replyCodeJson);
     }
 
     int toggleRelayId = doc["toggleRelayId"];
-    Serial.print("Relay to toggle = ");
-    Serial.println(toggleRelayId);
 
     if (toggleRelayId) {
       toggleRelay(toggleRelayId);
@@ -175,8 +171,6 @@ void sendFullStatePayloadPacket() {
 
   createFullStateJsonPayload(info, items);
   serializeJson(doc, payload);
-  //  Serial.println("printing payload on tcp reply");
-  //  Serial.println(payload);
 
   client.println(payload);
 }
