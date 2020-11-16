@@ -1,5 +1,7 @@
+#include <EthernetENC.h>
 #include <ArduinoJson.h>
 #include "src/IODevice.h"
+#include "src/ReplyEnum.h"
 
 const int arduinoId = 1;
 

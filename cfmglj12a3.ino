@@ -114,7 +114,7 @@ void sensorLoop() {
     if (isLiftAsc()) {
       flipLiftUpRelay();
     }
-    sendFullStatePayloadUdpPacket();
+    sendNewStateToServer();
 
     flagBinAtDrop = false;
   }
@@ -125,7 +125,7 @@ void sensorLoop() {
     if (isLiftDesc()) {
       flipLiftDownRelay();
     }
-    sendFullStatePayloadUdpPacket();
+    sendNewStateToServer();
 
     flagBinAtLoad = false;
   }
