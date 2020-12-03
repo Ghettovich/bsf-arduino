@@ -1,4 +1,11 @@
+#include <SPI.h>
+#include "Adafruit_MQTT.h"
+#include "Adafruit_MQTT_Client.h"
+
 #include <EthernetENC.h>
+#include <EthernetClient.h>
+#include <Dns.h>
+#include <Dhcp.h>
 #include <ArduinoJson.h>
 #include "src/IODevice.h"
 #include "src/ReplyEnum.h"
@@ -57,7 +64,7 @@ void setup() {
 void loop() {
     // Listen for incoming packets
     sensorLoop();
-    receiveEthernetPacketLoop();
+    //receiveEthernetPacketLoop();
 
     prevState = currentState;
 }

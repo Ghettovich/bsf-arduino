@@ -8,7 +8,7 @@ volatile bool flagBinAtLoad = false;
 // id's correspond to table in database
 const int detectionSensorTypeId = 2;
 const int sensorDropId = 10, sensorLoadId = 11;
-const int sensorBinLoadPinNr = 21, sensorBinDropPinNr = 2;
+const int sensorBinLoadPinNr = 21, sensorBinDropPinNr = 20;
 
 IODevice detectionSensorBinDrop;
 IODevice detectionSensorBinLoad;
