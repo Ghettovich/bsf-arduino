@@ -105,9 +105,7 @@ bool isBinDetected() {
 
 void sensorLoop() {
   if (flagBinAtDrop) {
-    Serial.println("sensor top flipped");
-    Serial.print("Value = ");
-    Serial.println(digitalRead(sensorBinDropPinNr));
+    Serial.println("Flag bin at drop true");
 
     if (isLiftAsc()) {
       flipLiftUpRelay();
@@ -117,9 +115,8 @@ void sensorLoop() {
     flagBinAtDrop = false;
   }
   if (flagBinAtLoad) {
-    Serial.println("sensor btm flipped");
-    Serial.print("Value = ");
-    Serial.println(digitalRead(sensorBinLoadPinNr));
+    Serial.println("Flag bin at load true");
+    
     if (isLiftDesc()) {
       flipLiftDownRelay();
     }

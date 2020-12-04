@@ -13,11 +13,11 @@ Adafruit_MQTT_Client mqtt(&client, SERVER, PORT);
 
 // Setup a feed called 'photocell' for publishing.
 // Notice MQTT paths for AIO follow the form: <username>/feeds/<feedname>
-Adafruit_MQTT_Publish proximityPublish = Adafruit_MQTT_Publish(&mqtt, "proximity/lift");
-Adafruit_MQTT_Publish toggleRelayPublish = Adafruit_MQTT_Publish(&mqtt, "relay/states");
+Adafruit_MQTT_Publish proximityPublish = Adafruit_MQTT_Publish(&mqtt, "/proximity/lift");
+Adafruit_MQTT_Publish toggleRelayPublish = Adafruit_MQTT_Publish(&mqtt, "/relay/states");
 
 // Setup a feed called 'onoff' for subscribing to changes.
-Adafruit_MQTT_Subscribe toggleRelaySubcription = Adafruit_MQTT_Subscribe(&mqtt, "toggle/relay", MQTT_QOS_1);
+Adafruit_MQTT_Subscribe toggleRelaySubcription = Adafruit_MQTT_Subscribe(&mqtt, "/toggle/relay", MQTT_QOS_1);
 
 void setupMqttClient() {
   Serial.begin(57600);
@@ -30,6 +30,8 @@ void setupMqttClient() {
   delay(1000); //give the ethernet a second to initialize
 
 
+  toggleRelaySubcription.setCallback(toggleRelayCallback);
+
   mqtt.subscribe(&toggleRelaySubcription);
 }
 
@@ -41,19 +43,9 @@ void mqttLoop() {
   // function definition further below.
   MQTT_connect();
 
-  // this is our 'wait for incoming subscription packets' busy subloop
-  Adafruit_MQTT_Subscribe *subscription;
-  while ((subscription = mqtt.readSubscription(100))) {
-    if (subscription == &toggleRelaySubcription) {
-      deserializeToggleRelayMessage();
-    }
-  }
-
-  if (flagPublishProximity) {
-    publishMessageProximityChanged();
-
-    flagPublishProximity = false;
-  }
+  // this is our 'wait for incoming subscription packets and callback em' busy subloop
+  // try to spend your time here:
+  mqtt.processPackets(1000);
 
   // ping the server to keep the mqtt connection alive
   if (! mqtt.ping()) {
@@ -83,12 +75,15 @@ void MQTT_connect() {
   Serial.println("MQTT Connected!");
 }
 
-void deserializeToggleRelayMessage() {
-  const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(1) + 2 * JSON_OBJECT_SIZE(3) + 40;
-  DynamicJsonDocument doc(capacity);
+void toggleRelayCallback(char *data, uint16_t len) {
+  deserializeToggleRelayMessage(data, len);
+}
 
-  deserializeJson(doc, (char *)toggleRelaySubcription.lastread);
-  
+void deserializeToggleRelayMessage(char *data, uint16_t len) {
+  //const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(1) + 2 * JSON_OBJECT_SIZE(3) + 40;
+  DynamicJsonDocument doc(len);
+  deserializeJson(doc, data);
+
   int toggleRelayId = doc["toggle"];
 
   if (toggleRelayId) {
@@ -115,7 +110,7 @@ void publishMessageProximityChanged() {
 }
 
 void publishMessageRelayStates() {
-  const size_t capacity = JSON_ARRAY_SIZE(8) + JSON_OBJECT_SIZE(1) + 8*JSON_OBJECT_SIZE(2);
+  const size_t capacity = JSON_ARRAY_SIZE(8) + JSON_OBJECT_SIZE(1) + 8 * JSON_OBJECT_SIZE(2);
   char payload[capacity];
   DynamicJsonDocument doc(capacity);
   JsonArray items = doc.createNestedArray("relays");

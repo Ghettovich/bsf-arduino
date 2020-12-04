@@ -3,6 +3,7 @@
 
 bool flagRelayToggled = false;
 const int relayBlockSize = 8, relayTypeId = 3;
+IODevice relayToToggle;
 IODevice relayArray[relayBlockSize];
 
 const int relayLiftUp = 30, relayLiftDown = 31,
@@ -56,7 +57,6 @@ void addRelayArrayToJsonArray(JsonArray items) {
 void toggleRelay(int relayId) {
   Serial.print("relay id = ");
   Serial.println(relayId);
-  IODevice relayToToggle;
 
   for (byte i = 0; i < relayBlockSize ; ++i) {
     if (relayArray[i].id == relayId) {
@@ -65,62 +65,59 @@ void toggleRelay(int relayId) {
     }
   }
 
-  if (relayToToggle.id > 0) {
-
-    switch (relayId) {
-      case relayLiftUp :
-        onLiftUpRelay(relayToToggle);
-        break;
-      case relayLiftDown :
-        onLiftDownRelay(relayToToggle);
-        break;
-      case relayLiftBinLoad :
-        onBinLoad(relayToToggle);
-        break;
-      case relayBinDrop :
-        onBinDrop(relayToToggle);
-        break;
-      case relayFeederFWD_1 :
-        onValveFeederFwd_1(relayToToggle);
-        break;
-      case relayFeederREV_1 :
-        onValveFeederRev_1(relayToToggle);
-        break;
-      case relayFeederFWD_2 :
-        onValveFeederFwd_2(relayToToggle);
-        break;
-      case relayFeederREV_2 :
-        onValveFeederRev_2(relayToToggle);
-        break;
-      default:
-        Serial.println("unkown id for relay");
-        break;
-    }
-
-  } else {
-    Serial.println("unable to find matching id for relay.");
+  switch (relayToToggle.id) {
+    case relayLiftUp :
+      onLiftUpRelay();
+      break;
+    case relayLiftDown :
+      onLiftDownRelay();
+      break;
+    case relayLiftBinLoad :
+      onBinLoad();
+      break;
+    case relayBinDrop :
+      onBinDrop();
+      break;
+    case relayFeederFWD_1 :
+      onValveFeederFwd_1();
+      break;
+    case relayFeederREV_1 :
+      onValveFeederRev_1();
+      break;
+    case relayFeederFWD_2 :
+      onValveFeederFwd_2();
+      break;
+    case relayFeederREV_2 :
+      onValveFeederRev_2();
+      break;
+    default:
+      Serial.println("unkown id for relay");
+      break;
   }
 }
 
 
 /** TURN ON/OFF RELAYS */
 // received instruction to send lift UP to position BIN DROP
-void onLiftUpRelay(IODevice relayToToggle) {
+void onLiftUpRelay() {
   if (!digitalRead(relayToToggle.pinNr) == LOW) {
+    digitalWrite(relayToToggle.pinNr, LOW);
     if (isBinAtLoad()) {
-      setState(StateCode::LIFT_ASC);
       digitalWrite(relayToToggle.pinNr, LOW);
+      setState(StateCode::LIFT_ASC);
     }
   } else {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
 
+  Serial.println("toggled lift up");
   flagRelayToggled = true;
 }
 
 // received instruction to send lift DOWN to LOAD
-void onLiftDownRelay(IODevice relayToToggle) {
+void onLiftDownRelay() {
   if (!digitalRead(relayToToggle.pinNr) == LOW) {
+    digitalWrite(relayToToggle.pinNr, LOW);
     if (isBinAtDrop()) {
       setState(StateCode::LIFT_DESC);
       digitalWrite(relayToToggle.pinNr, LOW);
@@ -129,10 +126,11 @@ void onLiftDownRelay(IODevice relayToToggle) {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
 
+  Serial.println("toggled lift down");
   flagRelayToggled = true;
 }
 
-void onBinLoad(IODevice relayToToggle) {
+void onBinLoad() {
   // TODO VERIFY SENSOR CHECK
   if (!digitalRead(relayToToggle.pinNr) == LOW) {
     digitalWrite(relayToToggle.pinNr, LOW);
@@ -143,7 +141,7 @@ void onBinLoad(IODevice relayToToggle) {
   flagRelayToggled = true;
 }
 
-void onBinDrop(IODevice relayToToggle) {
+void onBinDrop() {
   // TODO VERIFY SENSOR CHECK
   if (!digitalRead(relayToToggle.pinNr) == LOW) {
     digitalWrite(relayToToggle.pinNr, LOW);
@@ -155,7 +153,7 @@ void onBinDrop(IODevice relayToToggle) {
 }
 
 // FEEDERS 1 & 2
-void onValveFeederFwd_1(IODevice relayToToggle) {
+void onValveFeederFwd_1() {
   if (!digitalRead(relayToToggle.pinNr) == LOW) {
     digitalWrite(relayToToggle.pinNr, LOW);
   } else {
@@ -165,7 +163,7 @@ void onValveFeederFwd_1(IODevice relayToToggle) {
   flagRelayToggled = true;
 }
 
-void onValveFeederRev_1(IODevice relayToToggle) {
+void onValveFeederRev_1() {
   if (!digitalRead(relayToToggle.pinNr) == LOW) {
     digitalWrite(relayToToggle.pinNr, LOW);
   } else {
@@ -175,7 +173,7 @@ void onValveFeederRev_1(IODevice relayToToggle) {
   flagRelayToggled = true;
 }
 
-void onValveFeederFwd_2(IODevice relayToToggle) {
+void onValveFeederFwd_2() {
   if (!digitalRead(relayToToggle.pinNr) == LOW) {
     digitalWrite(relayToToggle.pinNr, LOW);
   } else {
@@ -185,7 +183,7 @@ void onValveFeederFwd_2(IODevice relayToToggle) {
   flagRelayToggled = true;
 }
 
-void onValveFeederRev_2(IODevice relayToToggle) {
+void onValveFeederRev_2() {
   Serial.println("Hoi rev2");
   if (!digitalRead(relayToToggle.pinNr) == LOW) {
     digitalWrite(relayToToggle.pinNr, LOW);
@@ -198,12 +196,10 @@ void onValveFeederRev_2(IODevice relayToToggle) {
 
 void flipLiftUpRelay() {
   toggleRelay(relayLiftUp);
-  flagRelayToggled = true;
 }
 
 void flipLiftDownRelay() {
   toggleRelay(relayLiftDown);
-  flagRelayToggled = true;
 }
 
 bool isLiftAsc() {
@@ -233,7 +229,7 @@ bool isLiftDesc() {
 }
 
 void relayLoop() {
-  if(flagRelayToggled) {
+  if (flagRelayToggled) {
     publishMessageRelayStates();
 
     flagRelayToggled = false;
