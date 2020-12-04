@@ -35,7 +35,6 @@ void setupDetectionSensors() {
 void addBinDropToJsonArray(JsonArray items) {
   JsonObject obj = items.createNestedObject();
   obj["id"] = detectionSensorBinDrop.id;
-  obj["typeId"] = detectionSensorTypeId;
 
   if (digitalRead(detectionSensorBinDrop.pinNr) == LOW) {
     obj["low"] = 1;
@@ -48,7 +47,6 @@ void addBinDropToJsonArray(JsonArray items) {
 void addBinLoadToJsonArray(JsonArray items) {
   JsonObject obj = items.createNestedObject();
   obj["id"] = detectionSensorBinLoad.id;
-  obj["typeId"] = detectionSensorTypeId;
 
   if (digitalRead(detectionSensorBinLoad.pinNr) == LOW) {
     obj["low"] = 1;
@@ -114,7 +112,7 @@ void sensorLoop() {
     if (isLiftAsc()) {
       flipLiftUpRelay();
     }
-    sendNewStateToServer();
+    publishMessageProximityChanged();
 
     flagBinAtDrop = false;
   }
@@ -125,7 +123,7 @@ void sensorLoop() {
     if (isLiftDesc()) {
       flipLiftDownRelay();
     }
-    sendNewStateToServer();
+    publishMessageProximityChanged();
 
     flagBinAtLoad = false;
   }

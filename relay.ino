@@ -1,6 +1,7 @@
 #include "src/IODevice.h"
 #include <ArduinoJson.h>
 
+bool flagRelayToggled = false;
 const int relayBlockSize = 8, relayTypeId = 3;
 IODevice relayArray[relayBlockSize];
 
@@ -42,7 +43,6 @@ void addRelayArrayToJsonArray(JsonArray items) {
   for (byte i = 0; i < relayBlockSize; i++) {
     JsonObject obj = items.createNestedObject();
     obj["id"] = relayArray[i].id;
-    obj["typeId"] = relayTypeId;
 
     if (digitalRead(relayArray[i].pinNr) == LOW) {
       obj["low"] = 1;
@@ -61,6 +61,7 @@ void toggleRelay(int relayId) {
   for (byte i = 0; i < relayBlockSize ; ++i) {
     if (relayArray[i].id == relayId) {
       relayToToggle = relayArray[i];
+      Serial.println("Found id!");
     }
   }
 
@@ -113,6 +114,8 @@ void onLiftUpRelay(IODevice relayToToggle) {
   } else {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
+
+  flagRelayToggled = true;
 }
 
 // received instruction to send lift DOWN to LOAD
@@ -125,6 +128,8 @@ void onLiftDownRelay(IODevice relayToToggle) {
   } else {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
+
+  flagRelayToggled = true;
 }
 
 void onBinLoad(IODevice relayToToggle) {
@@ -134,6 +139,8 @@ void onBinLoad(IODevice relayToToggle) {
   } else {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
+
+  flagRelayToggled = true;
 }
 
 void onBinDrop(IODevice relayToToggle) {
@@ -143,6 +150,8 @@ void onBinDrop(IODevice relayToToggle) {
   } else {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
+
+  flagRelayToggled = true;
 }
 
 // FEEDERS 1 & 2
@@ -152,6 +161,8 @@ void onValveFeederFwd_1(IODevice relayToToggle) {
   } else {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
+
+  flagRelayToggled = true;
 }
 
 void onValveFeederRev_1(IODevice relayToToggle) {
@@ -160,6 +171,8 @@ void onValveFeederRev_1(IODevice relayToToggle) {
   } else {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
+
+  flagRelayToggled = true;
 }
 
 void onValveFeederFwd_2(IODevice relayToToggle) {
@@ -168,6 +181,8 @@ void onValveFeederFwd_2(IODevice relayToToggle) {
   } else {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
+
+  flagRelayToggled = true;
 }
 
 void onValveFeederRev_2(IODevice relayToToggle) {
@@ -177,14 +192,18 @@ void onValveFeederRev_2(IODevice relayToToggle) {
   } else {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
+
+  flagRelayToggled = true;
 }
 
 void flipLiftUpRelay() {
   toggleRelay(relayLiftUp);
+  flagRelayToggled = true;
 }
 
 void flipLiftDownRelay() {
   toggleRelay(relayLiftDown);
+  flagRelayToggled = true;
 }
 
 bool isLiftAsc() {
@@ -211,4 +230,12 @@ bool isLiftDesc() {
     }
   }
   return false;
+}
+
+void relayLoop() {
+  if(flagRelayToggled) {
+    publishMessageRelayStates();
+
+    flagRelayToggled = false;
+  }
 }

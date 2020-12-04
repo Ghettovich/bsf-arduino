@@ -52,7 +52,7 @@ void setup() {
 
     setupRelayArray();
     setupDetectionSensors();
-    setupECN28J60Adapter();
+    setupMqttClient();
 
     setState(StateCode::READY);
 
@@ -64,7 +64,8 @@ void setup() {
 void loop() {
     // Listen for incoming packets
     sensorLoop();
-    //receiveEthernetPacketLoop();
+    mqttLoop();
+    relayLoop();
 
     prevState = currentState;
 }
