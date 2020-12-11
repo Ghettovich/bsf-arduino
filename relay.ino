@@ -39,6 +39,19 @@ void setupRelayArray() {
   createRelayStub();
 }
 
+void setflagRelayToggled(bool flag) {
+  flagRelayToggled = flag;
+}
+
+void setRelayIdToToggle(int relayId) {
+  for (byte i = 0; i < relayBlockSize ; ++i) {
+    if (relayArray[i].id == relayId) {
+      relayToToggle = relayArray[i];
+      Serial.println("Found id!");
+    }
+  }
+}
+
 void addRelayArrayToJsonArray(JsonArray items) {
 
   for (byte i = 0; i < relayBlockSize; i++) {
@@ -54,16 +67,7 @@ void addRelayArrayToJsonArray(JsonArray items) {
   }
 }
 
-void toggleRelay(int relayId) {
-  Serial.print("relay id = ");
-  Serial.println(relayId);
-
-  for (byte i = 0; i < relayBlockSize ; ++i) {
-    if (relayArray[i].id == relayId) {
-      relayToToggle = relayArray[i];
-      Serial.println("Found id!");
-    }
-  }
+void toggleRelay() {
 
   switch (relayToToggle.id) {
     case relayLiftUp :
@@ -111,7 +115,6 @@ void onLiftUpRelay() {
   }
 
   Serial.println("toggled lift up");
-  flagRelayToggled = true;
 }
 
 // received instruction to send lift DOWN to LOAD
@@ -127,7 +130,6 @@ void onLiftDownRelay() {
   }
 
   Serial.println("toggled lift down");
-  flagRelayToggled = true;
 }
 
 void onBinLoad() {
@@ -137,8 +139,6 @@ void onBinLoad() {
   } else {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
-
-  flagRelayToggled = true;
 }
 
 void onBinDrop() {
@@ -148,8 +148,6 @@ void onBinDrop() {
   } else {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
-
-  flagRelayToggled = true;
 }
 
 // FEEDERS 1 & 2
@@ -159,8 +157,6 @@ void onValveFeederFwd_1() {
   } else {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
-
-  flagRelayToggled = true;
 }
 
 void onValveFeederRev_1() {
@@ -169,8 +165,6 @@ void onValveFeederRev_1() {
   } else {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
-
-  flagRelayToggled = true;
 }
 
 void onValveFeederFwd_2() {
@@ -179,8 +173,6 @@ void onValveFeederFwd_2() {
   } else {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
-
-  flagRelayToggled = true;
 }
 
 void onValveFeederRev_2() {
@@ -190,16 +182,16 @@ void onValveFeederRev_2() {
   } else {
     digitalWrite(relayToToggle.pinNr, HIGH);
   }
-
-  flagRelayToggled = true;
 }
 
 void flipLiftUpRelay() {
-  toggleRelay(relayLiftUp);
+  setRelayIdToToggle(relayLiftUp);
+  setflagRelayToggled(true);
 }
 
 void flipLiftDownRelay() {
-  toggleRelay(relayLiftDown);
+  setRelayIdToToggle(relayLiftDown);
+  setflagRelayToggled(true);
 }
 
 bool isLiftAsc() {
@@ -230,6 +222,7 @@ bool isLiftDesc() {
 
 void relayLoop() {
   if (flagRelayToggled) {
+    toggleRelay();
     publishMessageRelayStates();
 
     flagRelayToggled = false;
