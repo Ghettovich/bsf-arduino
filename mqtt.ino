@@ -19,8 +19,8 @@ Adafruit_MQTT_Client mqtt(&client, SERVER, PORT);
 
 // Setup a feed called 'photocell' for publishing.
 // Notice MQTT paths for AIO follow the form: <username>/feeds/<feedname>
-Adafruit_MQTT_Publish proximityPublish = Adafruit_MQTT_Publish(&mqtt, proximityLiftTopic);
-Adafruit_MQTT_Publish toggleRelayPublish = Adafruit_MQTT_Publish(&mqtt, relayStatesTopic);
+Adafruit_MQTT_Publish proximityPublish = Adafruit_MQTT_Publish(&mqtt, proximityLiftTopic, MQTT_QOS_1, 1);
+Adafruit_MQTT_Publish toggleRelayPublish = Adafruit_MQTT_Publish(&mqtt, relayStatesTopic, MQTT_QOS_1, 1);
 
 // Setup a feed called 'onoff' for subscribing to changes.
 Adafruit_MQTT_Subscribe toggleRelaySubcription = Adafruit_MQTT_Subscribe(&mqtt, toggleRelaySub, MQTT_QOS_1);
@@ -35,39 +35,12 @@ void setupMqttClient() {
   Ethernet.begin(macMqtt);
   delay(1000); //give the ethernet a second to initialize
 
-  //publishProximityWill();
-
-  delayStart = millis();
+  //delayStart = millis();
   delayPingStart = true;
 
   toggleRelaySubcription.setCallback(toggleRelayCallback);
 
   mqtt.subscribe(&toggleRelaySubcription);
-}
-
-void publishProximityWill() {
-  const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(1) + 2 * JSON_OBJECT_SIZE(3);
-  char payload[capacity];
-  DynamicJsonDocument doc(capacity);
-  JsonArray sensors = doc.createNestedArray("proximities");
-
-  addBinDropToJsonArray(sensors);
-  addBinLoadToJsonArray(sensors);
-
-  serializeJson(doc, payload);
-  mqtt.will("/proximity/lift", payload, 1, 1);
-}
-
-void publishRelayWillState() {
-  const size_t capacity = JSON_ARRAY_SIZE(8) + JSON_OBJECT_SIZE(1) + 8 * JSON_OBJECT_SIZE(2);
-  char payload[capacity];
-  DynamicJsonDocument doc(capacity);
-  JsonArray items = doc.createNestedArray("relays");
-
-  addRelayArrayToJsonArray(items);
-
-  serializeJson(doc, payload);
-  mqtt.will(relayStatesTopic, payload, 1, 1);  
 }
 
 uint32_t x = 0;
